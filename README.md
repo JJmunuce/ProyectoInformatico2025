@@ -2,6 +2,6 @@
 
  * Juan Cruz Segundo
  * Nahuel Tear
- * Federico Ramirez
  * Juan Jose Munuce
+
 
