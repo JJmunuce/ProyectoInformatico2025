@@ -5,6 +5,6 @@ from flask_mysqldb import MySQL
 app.config['MYSQL_HOST'] = 'localhost' 
 app.config['MYSQL_USER'] = 'proyecto'
 app.config['MYSQL_PASSWORD'] ='proyecto'
-app.config['MYSQL_DB'] = 'proyecto'
+app.config['MYSQL_DB'] = 'turnos'
 
 mysql = MySQL(app)

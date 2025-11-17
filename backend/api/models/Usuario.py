@@ -60,10 +60,16 @@ class Usuario():
             # Control: ¿existen valores para la autenticación?
             if not auth or not auth.username or not auth.password:
                 return jsonify({"message": "No autorizado"}), 401       
-                    
+            
             # Control: ¿existe el usuario en la BD?
             cur = mysql.connection.cursor()
-            cur.callproc('sp_obtenerPWDByUsuario', (auth.username,))
+            sqlComando = """
+                SELECT contraseña
+                FROM usuario
+                WHERE nombre = %s
+            """
+            
+            cur.execute(sqlComando, (auth.username,))
             data = cur.fetchone()
             cur.close()
             
@@ -71,19 +77,24 @@ class Usuario():
                 return jsonify({"message": "El usuario es incorrecto o no se ha registrado en el sistema"}), 401
 
             # Obtengo la contraseña encriptada de la BD y la comparo con la contraseña ingresada por el usuario
+
             pwd_encriptada = data[0]
             if check_password_hash(pwd_encriptada, auth.password):
+                print("OK")
                 cur = mysql.connection.cursor()
-                cur.callproc('sp_loginUsuario', (auth.username, pwd_encriptada))
+                sqlComando = """
+                SELECT id_usuario, nombre, correo, id_negocio
+                FROM usuario
+                WHERE nombre = lower(%s) AND contraseña = %s;
+                """
+                cur.execute(sqlComando, (auth.username, pwd_encriptada))
                 data = cur.fetchone()
                 cur.close()
             else:
+                print("error")
                 return jsonify({"message":"La contraseña ingresada es incorrecta"}), 401
             
-            # En este paso verifico que el usuario esté vigente, es decir, no haya sido eliminado
             usuario = Usuario(data)
-            if usuario._id_tipoEstado == 2:
-                return jsonify({"message": "El usuario se encuentra desactivado. Consulte al administrador"}), 402
             
             # El usuario existe en la BD y coincide su contraseña
             token = jwt.encode({'id_usuario': usuario._id_usuario,
@@ -91,8 +102,9 @@ class Usuario():
 
             usuario_json = usuario.to_json()
             usuario_json['token'] =  token
-
+            print(usuario_json)
             return jsonify(usuario_json)
         
         except Exception as ex:
+            print("Exception")
             return {'message': str(ex)}, 401
