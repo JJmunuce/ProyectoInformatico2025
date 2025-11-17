@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Cliente - TurnosApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos CSS (sin cambios importantes) */
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #f97316;
+            --bg-color: #f9fafb;
+            --card-color: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: #1f2937;
+        }
+
+        .card {
+            background-color: var(--card-color);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+                        0 4px 6px -2px rgba(0, 4, 0, 0.05);
+        }
+
+        .day-selected {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
+            transform: scale(1.05);
+            border-color: var(--primary-color) !important;
+        }
+
+        .day-selected span {
+            color: white !important;
+        }
+
+        .time-slot {
+            transition: all 0.2s;
+            background-color: #e5e7eb;
+            color: #1f2937;
+            border: 1px solid #d1d5db;
+        }
+        .time-slot:hover {
+            background-color: #d1d5db;
+        }
+        .time-slot-selected {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
+        }
+
+        #time-slots-container::-webkit-scrollbar { display: none; }
+        #date-list-container {
+            overflow-x: scroll;
+            white-space: nowrap;
+            padding-bottom: 1rem;
+        }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#2563eb',
+                        'secondary': '#f97316',
+                        'bg-light': '#f9fafb',
+                        'card-light': '#ffffff',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-8">
+
+    <div id="alert-modal-container"></div>
+
+    <header class="w-full max-w-6xl py-4 mb-4">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-3xl font-extrabold text-gray-900 tracking-wider">Turnos<span class="text-primary">App</span></h1>
+            <div id="user-info" class="text-sm text-gray-600 flex items-center space-x-4">
+                <span id="welcome-message"></span>
+                <button id="logout-button" class="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition">
+                    Cerrar Sesión
+                </button>
+            </div>
+        </div>
+        
+        <nav class="border-b pb-2">
+            <div class="flex space-x-4">
+                <button data-view="reserve" class="nav-tab active-tab text-primary border-b-2 border-primary font-bold py-2 px-1 transition duration-200">
+                    📅 Reservar Turno
+                </button>
+                <button data-view="my-appointments" class="nav-tab text-gray-700 hover:text-primary py-2 px-1 transition duration-200">
+                    📋 Mis Turnos
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main id="client-content-container" class="w-full max-w-6xl card p-6 sm:p-12 rounded-2xl"></main>
+
+    <script>
+        // --- Variables Globales ---
+        let selectedDate = null;
+        let selectedTime = null;
+        let activeUserId = localStorage.getItem('activeUserId');
+        let activeUserRole = localStorage.getItem('activeUserRole');
+        let currentView = 'reserve';
+
+        // --- Simulación de Datos (DEBE COPIARSE DE panelNegocio.html para la simulación) ---
+        let simulatedUsers = JSON.parse(localStorage.getItem('simulatedUsers')) || [];
+        let services = JSON.parse(localStorage.getItem('services')) || [];
+        let appointments = JSON.parse(localStorage.getItem('appointments')) || [];
+
+        const currentUser = simulatedUsers.find(u => u.id === activeUserId);
+
+        const simulatedProfesionales = [
+            { id: 'p1', name: 'Dr. Sofía Ramírez', specialty: 'Psicóloga' },
+            { id: 'p2', name: 'Dr. Carlos Mendoza', specialty: 'Dentista' },
+            { id: 'p3', name: 'Lic. Ana Flores', specialty: 'Fisioterapeuta' },
+        ];
+
+        const simulatedServicios = [
+            { id: 's1', name: 'Consulta General', duration: 60, profesionalId: 'p1' },
+            { id: 's2', name: 'Limpieza Dental', duration: 45, profesionalId: 'p2' },
+            { id: 's3', name: 'Terapia Física (1h)', duration: 60, profesionalId: 'p3' },
+            { id: 's4', name: 'Diagnóstico Inicial', duration: 30, profesionalId: 'p2' },
+        ];
+
+        const availableTimeSlots = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+        
+        // --- Funciones de Persistencia ---
+        function saveAppointments() {
+             localStorage.setItem('appointments', JSON.stringify(appointments));
+        }
+        
+        // --- Funciones de UI/Utilidad (alertModal) (SIN CAMBIOS) ---
+        function alertModal(message, type) {
+            const container = document.getElementById('alert-modal-container');
+            container.innerHTML = "";
+
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50';
+
+            let title = '';
+            let colorClass = '';
+            let buttonClass = '';
+
+            if (type === 'success') {
+                title = '¡Éxito!';
+                colorClass = 'text-primary';
+                buttonClass = 'bg-primary hover:bg-blue-700';
+            } else if (type === 'error') {
+                title = 'Error de Reserva';
+                colorClass = 'text-red-500';
+                buttonClass = 'bg-red-500 hover:bg-red-600';
+            } else {
+                title = 'Atención';
+                colorClass = 'text-orange-500';
+                buttonClass = 'bg-orange-500 hover:bg-orange-600';
+            }
+
+            modal.innerHTML = `
+                <div class="card p-8 rounded-2xl shadow-2xl max-w-sm mx-4 border border-gray-100">
+                    <h5 class="text-2xl font-bold mb-4 ${colorClass}">${title}</h5>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <button id="close-modal" class="w-full px-4 py-3 ${buttonClass} text-white rounded-xl font-bold">
+                        Aceptar
+                    </button>
+                </div>
+            `;
+
+            container.appendChild(modal);
+
+            document.getElementById('close-modal').onclick = () => {
+                container.innerHTML = "";
+            };
+        }
+        
+        // --- Funciones de Renderizado de la Vista RESERVAR ---
+        
+        let timeSlotsContainer;
+        let reserveButton;
+        let selectProfesional;
+        let selectServicio;
+        let noSlotsMessage;
+        let dateListContainer;
+
+        function initializeSelectors() {
+            selectProfesional = document.getElementById("select-profesional");
+            selectServicio = document.getElementById("select-servicio");
+            if (!selectProfesional || !selectServicio) return;
+
+            selectProfesional.innerHTML = '<option value="" disabled selected>Seleccionar Profesional</option>';
+            simulatedProfesionales.forEach(p => {
+                const o = document.createElement('option');
+                o.value = p.id;
+                o.textContent = `${p.name} (${p.specialty})`;
+                selectProfesional.appendChild(o);
+            });
+
+            selectServicio.innerHTML = '<option value="" disabled selected>Seleccionar Servicio</option>';
+            simulatedServicios.forEach(s => {
+                const o = document.createElement('option');
+                o.value = s.id;
+                o.textContent = `${s.name} (${s.duration} min)`;
+                selectServicio.appendChild(o);
+            });
+            
+            // Asignar Eventos aquí, ya que los elementos se crean dinámicamente
+            selectProfesional.addEventListener("change", filterServices);
+            selectServicio.addEventListener("change", () => { renderTimeSlots(); selectedTime = null; updateReservationState(); });
+            reserveButton.addEventListener("click", reserveAppointment);
+        }
+
+        function filterServices() {
+            const id = selectProfesional.value;
+
+            selectServicio.innerHTML = '<option value="" disabled selected>Seleccionar Servicio</option>';
+            selectServicio.value = "";
+            selectedTime = null;
+            updateReservationState();
+            renderTimeSlots();
+
+            simulatedServicios
+                .filter(s => s.profesionalId === id)
+                .forEach(s => {
+                    const o = document.createElement('option');
+                    o.value = s.id;
+                    o.textContent = `${s.name} (${s.duration} min)`;
+                    selectServicio.appendChild(o);
+                });
+        }
+
+        function selectDay(el, dayNum) {
+            document.querySelectorAll('.day-selected').forEach(x => x.classList.remove('day-selected'));
+            el.classList.add('day-selected');
+
+            selectedDate = el.dataset.date;
+            selectedTime = null;
+            updateReservationState();
+
+            document.getElementById('available-times-title').textContent =
+                `Paso 3: Horarios para el ${dayNum}`;
+
+            renderTimeSlots();
+        }
+
+        function renderDateList() {
+            dateListContainer = document.getElementById("date-list-container");
+            if (!dateListContainer) return;
+            
+            dateListContainer.innerHTML = '';
+
+            const dayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+            const today = new Date();
+
+            for (let i = 0; i < 14; i++) {
+                const d = new Date(today);
+                d.setDate(today.getDate() + i);
+
+                const dow = dayNames[d.getDay()];
+                const dom = d.getDate();
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(dom).padStart(2, '0');
+
+                const dateKey = `${y}-${m}-${dd}`;
+
+                const card = document.createElement('div');
+                card.className = "flex-shrink-0 w-16 h-20 flex flex-col items-center justify-center p-2 rounded-xl border border-gray-300 bg-white cursor-pointer transition";
+                card.dataset.date = dateKey;
+
+                card.onclick = () => selectDay(card, dom);
+
+                card.innerHTML = `
+                    <span class="text-xs font-semibold text-gray-500">${dow}</span>
+                    <span class="text-2xl font-bold mt-1">${dom}</span>
+                `;
+
+                dateListContainer.appendChild(card);
+            }
+
+            dateListContainer.firstChild.click();
+        }
+
+        function renderTimeSlots() {
+            timeSlotsContainer = document.getElementById("time-slots-container");
+            noSlotsMessage = document.getElementById("no-slots-message");
+
+            if (!timeSlotsContainer) return;
+            timeSlotsContainer.innerHTML = "";
+
+            if (!selectProfesional.value || !selectServicio.value || !selectedDate) {
+                noSlotsMessage.classList.remove("hidden");
+                noSlotsMessage.textContent = "Selecciona un profesional y un servicio para ver los horarios disponibles.";
+                return;
+            }
+
+            noSlotsMessage.classList.add("hidden");
+
+            availableTimeSlots.forEach(t => {
+                const b = document.createElement('button');
+                b.className = "time-slot px-4 py-2 rounded-xl text-sm hover:ring-2 hover:ring-primary";
+                b.dataset.time = t;
+                b.textContent = formatTime(t);
+                timeSlotsContainer.appendChild(b);
+            });
+        }
+
+        function formatTime(t) {
+            const [h, m] = t.split(':').map(Number);
+            const ampm = h >= 12 ? "PM" : "AM";
+            const h12 = h % 12 || 12;
+            return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+        }
+
+        function selectTime(e) {
+            const btn = e.target.closest('.time-slot');
+            if (!btn) return;
+
+            document.querySelectorAll('.time-slot-selected')
+                .forEach(x => x.classList.remove('time-slot-selected'));
+
+            btn.classList.add('time-slot-selected');
+            selectedTime = btn.dataset.time;
+
+            updateReservationState();
+        }
+
+        function updateReservationState() {
+            reserveButton = document.getElementById("reserve-button");
+            if (!reserveButton) return;
+            reserveButton.disabled = !(selectProfesional.value && selectServicio.value && selectedDate && selectedTime);
+        }
+
+        function reserveAppointment() {
+            const prof = simulatedProfesionales.find(p => p.id === selectProfesional.value);
+            const serv = simulatedServicios.find(s => s.id === selectServicio.value);
+
+            if (!prof || !serv || !selectedDate || !selectedTime) {
+                alertModal("Completa todos los pasos antes de reservar.", "error");
+                return;
+            }
+
+            const [y, m, d] = selectedDate.split("-");
+            
+            // --- Lógica de Creación de Turno ---
+            const newAppointment = {
+                id: crypto.randomUUID(),
+                clientId: activeUserId, // Asignamos el turno al cliente logueado
+                serviceId: serv.id,
+                profesionalId: prof.id,
+                dateTime: `${selectedDate}T${selectedTime}:00`,
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            };
+            
+            appointments.push(newAppointment);
+            saveAppointments(); // Guardar los turnos en localStorage
+
+            const dateFormatted = `${d}/${m}/${y}`;
+            
+            alertModal(
+                `Turno Reservado con éxito!<br><br>
+                Profesional: ${prof.name}<br>
+                Servicio: ${serv.name}<br>
+                Fecha: ${dateFormatted} a las ${formatTime(selectedTime)}`,
+                "success"
+            );
+            
+            // Re-renderizar la vista de Mis Turnos si es necesario
+            if (currentView === 'my-appointments') {
+                 renderView('my-appointments');
+            }
+        }
+        
+        // --- Renderizado de Vistas ---
+        
+        function renderReserveView() {
+            return `
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Agenda tu Cita</h2>
+                <p class="text-gray-500 mb-10">Sigue los 3 pasos para confirmar tu reserva.</p>
+
+                <div class="border-b border-gray-200 pb-8 mb-8">
+                    <h4 class="text-xl font-bold text-gray-700 mb-4">Paso 1: Profesional y Servicio</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <select id="select-profesional" class="w-full p-3 border border-gray-300 bg-white rounded-xl focus:ring-primary focus:border-primary transition duration-150 shadow-sm text-gray-700">
+                            <option value="" disabled selected>Seleccionar Profesional</option>
+                        </select>
+
+                        <select id="select-servicio" class="w-full p-3 border border-gray-300 bg-white rounded-xl focus:ring-primary focus:border-primary transition duration-150 shadow-sm text-gray-700">
+                            <option value="" disabled selected>Seleccionar Servicio</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+                    <div>
+                        <h4 class="text-xl font-bold text-gray-700 mb-4">Paso 2: Elige la Fecha Disponible</h4>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-200 p-4 sm:p-6">
+                            <div id="date-list-container" class="flex space-x-4"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 id="available-times-title" class="text-xl font-bold text-gray-700 mb-4">
+                            Paso 3: Selecciona un Horario
+                        </h4>
+
+                        <div id="time-slots-container" class="flex flex-wrap gap-3 mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200 max-h-[350px] overflow-y-auto"></div>
+
+                        <p id="no-slots-message" class="text-gray-500 text-sm hidden p-4 bg-gray-100 rounded-xl">
+                            Selecciona un profesional y un servicio para ver los horarios disponibles.
+                        </p>
+
+                        <div class="mt-6">
+                            <button id="reserve-button" class="w-full py-3 bg-secondary text-white font-bold text-lg rounded-xl shadow-lg hover:bg-orange-600 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                Confirmar Reserva
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- Nueva Vista para Turnos del Cliente ---
+        function renderClientAppointmentsView() {
+            const clientAppointments = appointments.filter(a => a.clientId === activeUserId)
+                                                   .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+            const listHtml = clientAppointments.map(a => {
+                const service = simulatedServicios.find(s => s.id === a.serviceId);
+                const professional = simulatedProfesionales.find(p => p.id === a.profesionalId);
+                const date = new Date(a.dateTime);
+                const dateStr = date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+                const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                
+                const statusColor = a.status === 'pending' ? 'border-yellow-500' : 'border-blue-500';
+                const statusText = a.status === 'pending' ? 'Pendiente' : 'Completado';
+
+                return `
+                    <div class="flex items-start bg-white p-4 rounded-lg shadow-md border-l-4 ${statusColor}">
+                        <div class="flex-grow">
+                            <p class="text-lg font-bold text-gray-900">${dateStr} a las ${timeStr}</p>
+                            <p class="text-md font-semibold text-gray-700 mt-1">${service ? service.name : 'Servicio Desconocido'}</p>
+                            <p class="text-sm text-gray-500">con ${professional ? professional.name : 'Profesional Desconocido'}</p>
+                            <p class="text-xs text-gray-400 mt-1">Estado: <span class="font-bold">${statusText}</span></p>
+                        </div>
+                        <button data-id="${a.id}" class="cancel-appointment-btn bg-red-100 text-red-700 hover:bg-red-200 p-2 rounded-full transition ml-4" title="Cancelar Turno" ${a.status !== 'pending' ? 'disabled' : ''}>
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                 <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 102 0v6a1 1 0 10-2 0V8z" clip-rule="evenodd" />
+                             </svg>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            
+            return `
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Mis Turnos Agendados</h2>
+                <p class="text-gray-500 mb-6">Aquí puedes ver y gestionar tus próximas citas.</p>
+                <div class="space-y-4">
+                    ${listHtml || '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">Aún no tienes turnos agendados. ¡Reserva uno!</p>'}
+                </div>
+            `;
+        }
+
+        // --- Lógica de Navegación y Eventos Generales ---
+
+        function renderView(viewName) {
+            currentView = viewName;
+            const container = document.getElementById('client-content-container');
+            container.innerHTML = ''; 
+
+            document.querySelectorAll('.nav-tab').forEach(btn => {
+                const isActive = btn.getAttribute('data-view') === viewName;
+                if (isActive) {
+                    btn.classList.add('active-tab', 'text-primary', 'border-b-2', 'border-primary', 'font-bold');
+                    btn.classList.remove('text-gray-700', 'hover:text-primary');
+                } else {
+                    btn.classList.remove('active-tab', 'text-primary', 'border-b-2', 'border-primary', 'font-bold');
+                    btn.classList.add('text-gray-700', 'hover:text-primary');
+                }
+            });
+
+            if (viewName === 'reserve') {
+                container.innerHTML = renderReserveView();
+                initializeSelectors(); 
+                renderDateList();
+                renderTimeSlots();
+                timeSlotsContainer.addEventListener("click", selectTime); // Re-asignar listener
+                updateReservationState();
+            } else if (viewName === 'my-appointments') {
+                container.innerHTML = renderClientAppointmentsView();
+                setupClientAppointmentEventListeners();
+            }
+        }
+        
+        function setupClientAppointmentEventListeners() {
+             document.querySelectorAll('.cancel-appointment-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    const appointmentId = e.currentTarget.getAttribute('data-id');
+                    appointments = appointments.filter(a => a.id !== appointmentId);
+                    saveAppointments();
+                    alertModal("Turno cancelado correctamente.", "warning");
+                    renderView('my-appointments');
+                };
+            });
+        }
+        
+        document.querySelectorAll('.nav-tab').forEach(button => {
+            button.addEventListener('click', (e) => {
+                renderView(e.target.getAttribute('data-view'));
+            });
+        });
+
+        // --- Inicialización ---
+        function init() {
+            if (activeUserRole !== 'cliente' || !activeUserId) {
+                // Redirigir si no es un cliente o no está logueado
+                alertModal("Debes iniciar sesión como Cliente para acceder a esta página.", "error", () => {
+                    window.location.href = 'login.html';
+                });
+                return;
+            }
+            
+            document.getElementById('welcome-message').textContent = `Hola, ${currentUser ? currentUser.name : 'Cliente'}!`;
+            
+            document.getElementById('logout-button').onclick = () => {
+                localStorage.removeItem('activeUserId');
+                localStorage.removeItem('activeUserRole');
+                window.location.href = 'login.html';
+            };
+            
+            // Iniciar en la vista de reserva
+            renderView(currentView);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
