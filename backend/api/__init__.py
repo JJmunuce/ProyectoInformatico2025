@@ -8,9 +8,9 @@ CORS(app)
 app.config['SECRET_KEY'] = 'app_123'
 
 import api.routes.Login
-import api.routes.Cliente
-import api.routes.Negocio
-import api.routes.Profesional
-import api.routes.Usuario
-import api.routes.Servicio
-import api.routes.Turno
+import api.routes.cliente_routes
+import api.routes.negocio_routes
+import api.routes.profesional_routes
+import api.routes.usuario_routes
+import api.routes.servicio_routes
+import api.routes.turno_routes
