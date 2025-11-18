@@ -2,37 +2,480 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
-    <title>Iniciar Sesión - MiPortalSalud</title>
-    <link rel="stylesheet" href="styles/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso y Registro TurnosApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Definición de colores y fuente para el tema CLARO/moderno */
+        :root {
+            --primary-color: #2563eb; /* Blue 600 (Para acentos) */
+            --secondary-color: #f97316; /* Orange 500 (Para el botón principal) */
+            --bg-color: #f9fafb; /* Gray 50 (Fondo muy claro) */
+            --card-color: #ffffff; /* White (Fondo de tarjeta) */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: #1f2937; /* Texto Dark Gray */
+        }
+
+        /* Estilos específicos para la tarjeta de login y registro */
+        .auth-card {
+            background-color: var(--card-color);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* Sombra más pronunciada */
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .input-focus:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+        }
+    </style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#2563eb',
+                        'secondary': '#f97316',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="login-body">
+<body class="min-h-screen flex items-center justify-center p-4">
 
-    <div class="login-container">
+    <div id="alert-modal-container"></div>
+
+    <div id="auth-card" class="auth-card p-8 sm:p-10 rounded-2xl">
         
-        <h2 id="login-title">Iniciar Sesión</h2>
-        
-        <form action="dashboard.html" method="POST">
-            
-            <div class="form-group">
-                <label for="email">Email o DNI:</label>
-                <input type="text" id="email" name="email" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
+        <div id="login-view">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-extrabold text-gray-900 tracking-wider mb-2">
+                    Turnos<span class="text-primary">App</span>
+                </h1>
+                <p class="text-gray-500">Accede a tu cuenta.</p>
+                <p class="text-sm text-gray-400 mt-2">
+                    <span class="font-mono">Gestor: test@app.com / 12345678</span><br>
+                    <span class="font-mono">Cliente: cliente@app.com / 11111111</span>
+                </p>
             </div>
 
-            <input type="hidden" name="rol" id="rol-input">
-            
-            <button type="submit" class="login-button">Ingresar</button>
-            
-            <a href="index.html" class="back-link">Volver al inicio</a>
-        </form>
+            <form id="login-form">
+                <div class="mb-5">
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Correo Electrónico</label>
+                    <input type="email" id="email" name="email" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="tu.correo@ejemplo.com">
+                </div>
+
+                <div class="mb-5">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Contraseña</label>
+                    <input type="password" id="password" name="password" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="••••••••">
+                </div>
+                
+                <div class="mb-6">
+                    <label for="role-select" class="block text-sm font-medium text-gray-700 mb-2">Acceder como</label>
+                    <select id="role-select" name="role" required 
+                            class="input-focus w-full p-3 border border-gray-300 bg-white rounded-xl transition duration-150 shadow-sm focus:outline-none">
+                        <option value="" disabled selected>Selecciona tu rol</option>
+                        <option value="gestor">Gestor / Profesional</option>
+                        <option value="cliente">Cliente</option>
+                    </select>
+                </div>
+                
+                <button type="submit" 
+                        class="w-full py-3 bg-secondary text-white font-bold text-lg rounded-xl shadow-lg hover:bg-orange-600 transition duration-150 shadow-orange-500/30 focus:outline-none focus:ring-4 focus:ring-secondary/50">
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <div class="mt-6 text-center text-sm">
+                <a href="#" id="forgot-password-link" class="text-primary hover:text-blue-700 font-medium transition duration-150">
+                    ¿Olvidaste tu contraseña?
+                </a>
+                <p class="mt-3 text-gray-600">
+                    ¿No tienes cuenta? 
+                    <a href="#" id="register-link" class="text-primary hover:text-blue-700 font-medium transition duration-150">
+                        Regístrate aquí
+                    </a>
+                </p>
+            </div>
+        </div>
+
+        <div id="register-view" class="hidden">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-extrabold text-gray-900 tracking-wider mb-2">
+                    Crea tu Cuenta
+                </h2>
+                <p class="text-gray-500">Completa el formulario para empezar a usar TurnosApp.</p>
+            </div>
+
+            <form id="register-form">
+                <div class="mb-5">
+                    <label for="reg-name" class="block text-sm font-medium text-gray-700 mb-2">Nombre Completo</label>
+                    <input type="text" id="reg-name" name="name" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="Juan Pérez">
+                </div>
+
+                <div class="mb-5">
+                    <label for="reg-email" class="block text-sm font-medium text-gray-700 mb-2">Correo Electrónico</label>
+                    <input type="email" id="reg-email" name="email" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="tu.correo@ejemplo.com">
+                </div>
+
+                <div class="mb-5">
+                    <label for="reg-password" class="block text-sm font-medium text-gray-700 mb-2">Contraseña</label>
+                    <input type="password" id="reg-password" name="password" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="Introduce tu nueva contraseña">
+                    
+                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
+                        <div id="password-strength-bar" class="h-1.5 rounded-full transition-all duration-300 ease-in-out" style="width: 0%; background-color: #ef4444;"></div>
+                    </div>
+                    <ul class="text-sm text-gray-600 mt-2 ml-4 list-disc list-outside space-y-0.5">
+                        <li>Mínimo **8 caracteres**.</li>
+                        <li>Debe incluir **Mayúscula** y **minúscula**.</li>
+                        <li>Debe contener al menos un **número**.</li>
+                        <li>Debe contener un **símbolo especial** (ej: !@#$).</li>
+                    </ul>
+                </div>
+
+                <div class="mb-6">
+                    <label for="reg-confirm-password" class="block text-sm font-medium text-gray-700 mb-2">Confirmar Contraseña</label>
+                    <input type="password" id="reg-confirm-password" name="confirm_password" required 
+                            class="input-focus w-full p-3 border border-gray-300 rounded-xl transition duration-150 shadow-sm focus:outline-none"
+                            placeholder="Repite tu contraseña">
+                </div>
+                
+                <button type="submit" 
+                        class="w-full py-3 bg-primary text-white font-bold text-lg rounded-xl shadow-lg hover:bg-blue-700 transition duration-150 shadow-primary/30 focus:outline-none focus:ring-4 focus:ring-primary/50">
+                    Registrarme
+                </button>
+            </form>
+
+            <div class="mt-6 text-center text-sm">
+                <p class="text-gray-600">
+                    ¿Ya tienes una cuenta? 
+                    <a href="#" id="login-link" class="text-primary hover:bg-blue-700 font-medium transition duration-150">
+                        Inicia Sesión aquí
+                    </a>
+                </p>
+            </div>
+        </div>
     </div>
+    
+    <script>
+        // ==============================================
+        // SIMULACIÓN DE ALMACENAMIENTO DE DATOS (LOCAL STORAGE)
+        // ==============================================
+        
+        // Cargar/Inicializar usuarios simulados
+        let simulatedUsers = JSON.parse(localStorage.getItem('simulatedUsers')) || [
+            { id: 'sim-gestor-1', name: 'Gestor Admin', email: 'test@app.com', password: 'password12345678', role: 'gestor' }, // Gestor
+            { id: 'sim-cliente-1', name: 'Cliente Ejemplo', email: 'cliente@app.com', password: '11111111', role: 'cliente' } // Cliente
+        ];
+        
+        // Guardar usuarios en Local Storage
+        function saveUsers() {
+            localStorage.setItem('simulatedUsers', JSON.stringify(simulatedUsers));
+        }
+        
+        // Simular un ID de usuario para la sesión (random para anonimo, fijo para login)
+        let userId = localStorage.getItem('activeUserId') || crypto.randomUUID();
+        
+        // ==============================================
+        // FUNCIONES DE UTILIDAD (MODAL, VALIDACIÓN, VISTAS)
+        // ==============================================
+        
+        function validateEmail(email) {
+            const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+            return re.test(String(email).toLowerCase());
+        }
 
-    <script src="js/login.js"></script>
+        function validatePassword(password) {
+            const minLength = 8;
+            
+            if (password.length < minLength) {
+                return `La contraseña debe tener al menos ${minLength} caracteres.`;
+            }
+            if (!/[A-Z]/.test(password)) {
+                return "La contraseña debe contener al menos una letra mayúscula.";
+            }
+            if (!/[a-z]/.test(password)) {
+                return "La contraseña debe contener al menos una letra minúscula.";
+            }
+            if (!/\d/.test(password)) {
+                return "La contraseña debe contener al menos un número.";
+            }
+            if (!/[^a-zA-Z0-9\s]/.test(password)) {
+                return "La contraseña debe contener al menos un caracter especial (ej: !@#$).";
+            }
+            return null; // Válida
+        }
 
+        function checkPasswordStrength(password) {
+            let score = 0;
+            const minLength = 8;
+            
+            if (password.length >= minLength) { score++; }
+            if (/[A-Z]/.test(password) && /[a-z]/.test(password)) { score++; }
+            if (/\d/.test(password)) { score++; }
+            if (/[^a-zA-Z0-9\s]/.test(password)) { score++; }
+
+            const bar = document.getElementById('password-strength-bar');
+            if (!bar) return;
+
+            const scoreMap = {
+                0: { width: '0%', color: '#ef4444' }, // Rojo
+                1: { width: '25%', color: '#f97316' }, // Naranja
+                2: { width: '50%', color: '#facc15' }, // Amarillo
+                3: { width: '75%', color: '#84cc16' }, // Verde Lima
+                4: { width: '100%', color: '#22c55e' } // Verde Esmeralda
+            };
+
+            const strength = scoreMap[score];
+
+            if (password.length === 0) {
+                bar.style.width = '0%';
+                bar.style.backgroundColor = '#ef4444'; 
+                return score;
+            }
+
+            bar.style.width = strength.width;
+            bar.style.backgroundColor = strength.color;
+            
+            return score;
+        }
+
+        function switchView(viewId) {
+            document.getElementById('login-view').classList.add('hidden');
+            document.getElementById('register-view').classList.add('hidden');
+            
+            document.getElementById('login-form').reset();
+            document.getElementById('register-form').reset();
+            const bar = document.getElementById('password-strength-bar');
+            if (bar) {
+                bar.style.width = '0%';
+                bar.style.backgroundColor = '#ef4444';
+            }
+
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        function setLoading(form, isLoading) {
+            const button = form === 'login' 
+                ? document.querySelector('#login-form button[type="submit"]')
+                : document.querySelector('#register-form button[type="submit"]');
+
+            const buttonText = form === 'login' ? 'Iniciar Sesión' : 'Registrarme';
+
+            if (isLoading) {
+                button.disabled = true;
+                button.innerHTML = `
+                    <span class="flex items-center justify-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Cargando...
+                    </span>`;
+            } else {
+                button.disabled = false;
+                button.textContent = buttonText;
+            }
+        }
+        
+        function alertModal(message, type, callback = null) {
+            const container = document.getElementById('alert-modal-container');
+            container.innerHTML = ''; // Limpiar modales anteriores
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50 transition-opacity duration-300';
+
+            let title = '';
+            let colorClass = '';
+            let buttonClass = '';
+            
+            if (type === 'success') {
+                title = '¡Éxito!';
+                colorClass = 'text-primary';
+                buttonClass = 'bg-primary hover:bg-blue-700';
+            } else if (type === 'error') {
+                title = 'Error';
+                colorClass = 'text-red-500';
+                buttonClass = 'bg-red-500 hover:bg-red-600';
+            } else { // warning
+                title = 'Atención';
+                colorClass = 'text-orange-500';
+                buttonClass = 'bg-orange-500 hover:bg-orange-600';
+            }
+
+            modal.innerHTML = `
+                <div class="auth-card p-8 rounded-2xl shadow-2xl max-w-sm mx-4 transform transition-transform duration-300 scale-100 border border-gray-100">
+                    <h5 class="text-2xl font-bold mb-4 ${colorClass}">
+                        ${title}
+                    </h5>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <button id="close-modal" class="w-full px-4 py-3 ${buttonClass} text-white rounded-xl font-bold transition duration-150">
+                        Aceptar
+                    </button>
+                </div>
+            `;
+            container.appendChild(modal);
+            
+            // Listener para cerrar el modal
+            document.getElementById('close-modal').onclick = () => {
+                container.removeChild(modal);
+                if (callback) {
+                    callback();
+                }
+            };
+        }
+        
+        // ==============================================
+        // MANEJADORES DE EVENTOS (Lógica Local)
+        // ==============================================
+
+        // 1. Alternar a la vista de Registro
+        document.getElementById('register-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            switchView('register-view');
+        });
+
+        // 2. Alternar a la vista de Login
+        document.getElementById('login-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            switchView('login-view');
+        });
+        
+        // 3. EVENTO PARA LA BARRA DE PROGRESO
+        document.getElementById('reg-password').addEventListener('input', function() {
+            const password = this.value;
+            checkPasswordStrength(password);
+        });
+        
+        // 4. Lógica de Inicio de Sesión
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role-select').value; // Obtener el rol
+
+            if (!validateEmail(email)) {
+                alertModal("Por favor, introduce un formato de correo electrónico válido.", 'error');
+                return;
+            }
+            if (!role) {
+                alertModal("Por favor, selecciona tu rol (Gestor o Cliente).", 'error');
+                return;
+            }
+
+            setLoading('login', true);
+            
+            // Simulación de autenticación
+            const user = simulatedUsers.find(u => u.email === email && u.password === password && u.role === role);
+            
+            await new Promise(resolve => setTimeout(resolve, 500)); // Simular latencia de red
+
+            if (user) {
+                // Autenticación exitosa
+                userId = user.id; // Establecer ID de sesión
+                localStorage.setItem('activeUserId', userId); 
+                localStorage.setItem('activeUserRole', role); // Guardar el rol
+
+                let redirectPage = '';
+                if (role === 'gestor') {
+                    redirectPage = 'panelNegocio.html';
+                } else if (role === 'cliente') {
+                    redirectPage = 'citas.html'; // Redirigir al cliente a su panel
+                }
+                
+                alertModal(`Inicio de Sesión Exitoso como ${role.toUpperCase()}. Redirigiendo...`, 'success', () => {
+                    console.log(`Inicio de sesión exitoso. UID: ${userId}. Rol: ${role}. Redirigiendo a ${redirectPage}...`);
+                    window.location.href = redirectPage; 
+                });
+
+            } else {
+                // Autenticación fallida (revisar credenciales O rol)
+                alertModal("Credenciales o rol incorrectos. Verifica tus datos.", 'error');
+            }
+            
+            setLoading('login', false);
+        });
+
+        // 5. Lógica de Registro (SIN CAMBIOS)
+        document.getElementById('register-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const password = document.getElementById('reg-password').value;
+            const confirmPassword = document.getElementById('reg-confirm-password').value;
+
+            // Validaciones
+            const passwordError = validatePassword(password); 
+            if (passwordError) {
+                alertModal(passwordError, 'error');
+                return;
+            }
+            if (password !== confirmPassword) {
+                alertModal("Las contraseñas no coinciden. Por favor, verifica.", 'error');
+                return;
+            }
+            if (simulatedUsers.some(u => u.email === email)) {
+                alertModal("Este correo ya está registrado. Intenta iniciar sesión.", 'error');
+                return;
+            }
+
+            setLoading('register', true);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Simular latencia
+
+            try {
+                // Simulación de registro
+                const newUserId = crypto.randomUUID();
+                const newUser = {
+                    id: newUserId,
+                    name: name,
+                    email: email,
+                    password: password, 
+                    role: 'cliente', // Asumimos que el registro es para clientes por defecto
+                    createdAt: new Date().toISOString(),
+                };
+                
+                simulatedUsers.push(newUser);
+                saveUsers(); // Guardar el nuevo usuario en localStorage
+
+                console.log('Registro y perfil guardados con éxito. UID:', newUserId);
+                
+                alertModal("¡Registro Exitoso! Ahora puedes iniciar sesión como Cliente.", 'success', () => {
+                    switchView('login-view'); // Volver a login después del registro
+                });
+
+            } catch (error) {
+                console.error("Error durante el registro simulado:", error);
+                alertModal("Error inesperado durante el registro simulado.", 'error');
+            } finally {
+                setLoading('register', false);
+            }
+        });
+
+        // 6. Simulación de Olvidar Contraseña
+        document.getElementById('forgot-password-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            alertModal(
+                "En una aplicación real, se enviaría un correo de recuperación a tu dirección.", 
+                'warning'
+            );
+        });
+    </script>
 </body>
 </html>
