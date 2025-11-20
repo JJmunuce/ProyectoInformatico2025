@@ -1,110 +1,37 @@
-from api import app
-from flask import request, jsonify
-from api.db.db import mysql
-import jwt
-import datetime
-from werkzeug.security import check_password_hash
-
+from api import app, mysql
+from werkzeug.security import generate_password_hash
 
 class Usuario():
     """
-    Clase que representa a un usuario y contiene métodos relacionados con la autenticación.
+    Clase que representa a un usuario.
     """
 
     def __init__(self, data):
-        """
-        Constructor de la clase Usuario.
-
-        Parameters:
-            data (tuple): Datos del usuario.
-        """
-        self._id_usuario = data[0]
-        self._nombre = data[1]
-        self._correo = data[2]
-        self._id_negocio = data[3]
+        self._id_usuario = data['id_usuario']
+        self._nombre = data['nombre']
+        self._correo = data['correo']
+        self._id_negocio = data.get('id_negocio')
 
     def to_json(self):
-        """
-        Convierte el usuario a un objeto JSON.
-
-        Returns:
-            dict: Usuario en formato JSON.
-        """
         return {
             'id_usuario': self._id_usuario,
             'nombre': self._nombre,
-            'correo': self._correo            
+            'correo': self._correo,
+            'id_negocio': self._id_negocio
         }
     
-    @staticmethod
-    def login():
+    @classmethod
+    def create(cls, data):
         """
-        Método estático para la autenticación de usuarios.
-
-        Returns:
-            tuple: Respuesta JSON y código de estado HTTP.
+        Método para registrar un nuevo usuario (Usado por usuario_routes.py)
         """
-        try:
-            # Recibo el request del front
-            auth = request.authorization
-            
-            if not auth.username and not auth.password:
-                return jsonify({"message": "El campo Usuario y Contraseña no pueden estar vacíos"}), 401
-            else:
-                if not auth.username:
-                    return jsonify({"message": "El campo Usuario no puede estar vacío"}), 401
-                else:
-                    if not auth.password:
-                        return jsonify({"message": "El campo Contraseña no puede estar vacío"}), 401
-            
-            # Control: ¿existen valores para la autenticación?
-            if not auth or not auth.username or not auth.password:
-                return jsonify({"message": "No autorizado"}), 401       
-            
-            # Control: ¿existe el usuario en la BD?
-            cur = mysql.connection.cursor()
-            sqlComando = """
-                SELECT contraseña
-                FROM usuario
-                WHERE nombre = %s
-            """
-            
-            cur.execute(sqlComando, (auth.username,))
-            data = cur.fetchone()
-            cur.close()
-            
-            if data is None:
-                return jsonify({"message": "El usuario es incorrecto o no se ha registrado en el sistema"}), 401
-
-            # Obtengo la contraseña encriptada de la BD y la comparo con la contraseña ingresada por el usuario
-
-            pwd_encriptada = data[0]
-            if check_password_hash(pwd_encriptada, auth.password):
-                print("OK")
-                cur = mysql.connection.cursor()
-                sqlComando = """
-                SELECT id_usuario, nombre, correo, id_negocio
-                FROM usuario
-                WHERE nombre = lower(%s) AND contraseña = %s;
-                """
-                cur.execute(sqlComando, (auth.username, pwd_encriptada))
-                data = cur.fetchone()
-                cur.close()
-            else:
-                print("error")
-                return jsonify({"message":"La contraseña ingresada es incorrecta"}), 401
-            
-            usuario = Usuario(data)
-            
-            # El usuario existe en la BD y coincide su contraseña
-            token = jwt.encode({'id_usuario': usuario._id_usuario,
-                                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=100)}, app.config['SECRET_KEY'])
-
-            usuario_json = usuario.to_json()
-            usuario_json['token'] =  token
-            print(usuario_json)
-            return jsonify(usuario_json)
+        pwd_hash = generate_password_hash(data['contraseña'])
+        cur = mysql.connection.cursor()
         
-        except Exception as ex:
-            print("Exception")
-            return {'message': str(ex)}, 401
+        # Nota: Si id_negocio es None (cliente), MySQL lo aceptará si la columna permite NULL
+        cur.execute("INSERT INTO usuario (nombre, correo, contraseña, id_negocio) VALUES (%s, %s, %s, %s)",
+                    (data['nombre'], data['correo'], pwd_hash, data.get('id_negocio')))
+        
+        mysql.connection.commit()
+        cur.close()
+        return {"mensaje": "Usuario registrado"}

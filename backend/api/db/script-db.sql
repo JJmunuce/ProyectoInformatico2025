@@ -21,7 +21,7 @@ CREATE TABLE usuario (
     nombre       VARCHAR(100) NOT NULL,
     correo       VARCHAR(150) NOT NULL,
     contraseña   VARCHAR(255) NOT NULL,
-    id_negocio   INT UNSIGNED NOT NULL,
+    id_negocio   INT UNSIGNED NULL,
     
     CONSTRAINT fk_usuario_negocio
         FOREIGN KEY (id_negocio)
