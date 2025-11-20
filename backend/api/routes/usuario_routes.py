@@ -1,120 +1,182 @@
-from flask import Blueprint, jsonify, request
-from ..models import Usuario, db
+from api import app, mysql
+from flask import jsonify, request
+from api.models.usuario import Usuario
 from werkzeug.security import generate_password_hash, check_password_hash
-# (Necesitarás instalar werkzeug: pip install werkzeug)
-
-usuarios_bp = Blueprint('usuarios_bp', __name__)
-
+import jwt
+import datetime
 
 # --- Rutas para /api/usuarios (Lista y Crear) ---
-@usuarios_bp.route('/usuarios', methods=['GET', 'POST'])
+@app.route('/api/usuarios', methods=['GET', 'POST'])
 def handle_usuarios():
     
     # --- CREAR UN NUEVO USUARIO (POST) ---
     if request.method == 'POST':
         data = request.json
-        if not data or 'nombre' not in data or 'correo' not in data or 'contrasena' not in data or 'id_negocio' not in data:
-            return jsonify({"error": "'nombre', 'correo', 'contrasena' y 'id_negocio' son requeridos"}), 400
+        # Validación básica de campos obligatorios
+        if not data or 'nombre' not in data or 'correo' not in data or 'contraseña' not in data:
+            return jsonify({"error": "Faltan datos: 'nombre', 'correo' y 'contraseña' son requeridos"}), 400
             
-        # Revisar si el correo ya existe
-        if Usuario.query.filter_by(correo=data['correo']).first():
-            return jsonify({"error": "El correo electrónico ya está en uso"}), 409 # 409 Conflict
-            
+        # Validar si el correo ya existe
         try:
-            # Hashear la contraseña ANTES de guardarla
-            hashed_password = generate_password_hash(data['contrasena'])
+            cur = mysql.connection.cursor()
+            cur.execute("SELECT id_usuario FROM usuario WHERE correo = %s", (data['correo'],))
+            if cur.fetchone():
+                cur.close()
+                return jsonify({"error": "El correo electrónico ya está en uso"}), 409
+            cur.close()
+
+            # Preparar datos para el modelo (mapeando 'contrasena' del front a 'contraseña' del modelo)
+            # Nota: id_negocio puede ser None si es un cliente, usamos .get()
+            data_model = {
+                'id_usuario': None,
+                'nombre': data['nombre'],
+                'correo': data['correo'],
+                'contraseña': data['contraseña'], # Se pasa cruda, el modelo la hashea
+                'id_negocio': data.get('id_negocio') 
+            }
             
-            nuevo_usuario = Usuario(
-                nombre=data['nombre'],
-                correo=data['correo'],
-                contrasena_hash=hashed_password, # Guardamos el hash, no la contraseña
-                id_negocio=data['id_negocio']
-            )
-            db.session.add(nuevo_usuario)
-            db.session.commit()
-            
-            # Devolvemos el usuario serializado (el modelo NO debe serializar la contraseña)
-            return jsonify(nuevo_usuario.serialize()), 201
+            # Crear usuario usando el modelo
+            result = Usuario.create(data_model)
+            return jsonify(result), 201
             
         except Exception as e:
-            db.session.rollback()
             return jsonify({"error": str(e)}), 500
 
     # --- OBTENER TODOS LOS USUARIOS (GET) ---
-    if request.method == 'GET':
+    elif request.method == 'GET':
         try:
-            usuarios = Usuario.query.all()
-            return jsonify([usuario.serialize() for usuario in usuarios]), 200
+            cur = mysql.connection.cursor()
+            cur.execute("SELECT * FROM usuario")
+            rows = cur.fetchall()
+            cur.close()
+            # Convertir filas a lista de diccionarios usando el modelo
+            usuarios = [Usuario(row).to_json() for row in rows]
+            return jsonify(usuarios), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
 
-# --- Rutas para /api/usuarios/<id> (Uno Específico) ---
-@usuarios_bp.route('/usuarios/<int:id_usuario>', methods=['GET', 'PUT', 'DELETE'])
+# --- Rutas para /api/usuarios/<id> (Operaciones Individuales) ---
+@app.route('/api/usuarios/<int:id_usuario>', methods=['GET', 'PUT', 'DELETE'])
 def handle_usuario_by_id(id_usuario):
     
-    # Usamos get_or_404 para buscar al usuario o devolver 404 si no existe
-    usuario = Usuario.query.get_or_404(id_usuario, description="Usuario no encontrado")
+    try:
+        # Verificar existencia del usuario
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM usuario WHERE id_usuario = %s", (id_usuario,))
+        row = cur.fetchone()
+        cur.close()
 
-    # --- OBTENER UN USUARIO (GET por ID) ---
-    if request.method == 'GET':
-        return jsonify(usuario.serialize()), 200
+        if not row:
+            return jsonify({"error": "Usuario no encontrado"}), 404
 
-    # --- ACTUALIZAR UN USUARIO (PUT) ---
-    if request.method == 'PUT':
-        data = request.json
-        if not data:
-            return jsonify({"error": "No se enviaron datos para actualizar"}), 400
-        
-        # Actualizamos los campos
-        usuario.nombre = data.get('nombre', usuario.nombre)
-        usuario.id_negocio = data.get('id_negocio', usuario.id_negocio)
-        
-        # Manejo especial para el correo (verificar duplicados)
-        if 'correo' in data and data['correo'] != usuario.correo:
-            if Usuario.query.filter_by(correo=data['correo']).first():
-                return jsonify({"error": "El correo electrónico ya está en uso"}), 409
-            usuario.correo = data['correo']
+        usuario_obj = Usuario(row)
+
+        # --- OBTENER UN USUARIO (GET) ---
+        if request.method == 'GET':
+            return jsonify(usuario_obj.to_json()), 200
+
+        # --- ACTUALIZAR UN USUARIO (PUT) ---
+        if request.method == 'PUT':
+            data = request.json
             
-        # Manejo especial para la contraseña
-        if 'contrasena' in data:
-            usuario.contrasena_hash = generate_password_hash(data['contrasena'])
+            # Usar datos nuevos o mantener los actuales si no se envían
+            nombre = data.get('nombre', row['nombre'])
+            correo = data.get('correo', row['correo'])
+            id_negocio = data.get('id_negocio', row['id_negocio'])
             
-        try:
-            db.session.commit()
-            return jsonify(usuario.serialize()), 200
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({"error": str(e)}), 500
+            # Validar correo duplicado solo si cambió
+            if correo != row['correo']:
+                cur = mysql.connection.cursor()
+                cur.execute("SELECT id_usuario FROM usuario WHERE correo = %s", (correo,))
+                if cur.fetchone():
+                    cur.close()
+                    return jsonify({"error": "El correo ya está en uso"}), 409
+                cur.close()
 
-    # --- BORRAR UN USUARIO (DELETE) ---
-    if request.method == 'DELETE':
-        try:
-            db.session.delete(usuario)
-            db.session.commit()
+            cur = mysql.connection.cursor()
+            
+            # Si envían contraseña nueva, hay que hashearla
+            if 'contrasena' in data and data['contraseña']:
+                pwd_hash = generate_password_hash(data['contraseña'])
+                cur.execute("""
+                    UPDATE usuario SET nombre=%s, correo=%s, id_negocio=%s, contraseña=%s 
+                    WHERE id_usuario=%s
+                """, (nombre, correo, id_negocio, pwd_hash, id_usuario))
+            else:
+                # Si no hay contraseña nueva, actualizamos el resto
+                cur.execute("""
+                    UPDATE usuario SET nombre=%s, correo=%s, id_negocio=%s 
+                    WHERE id_usuario=%s
+                """, (nombre, correo, id_negocio, id_usuario))
+            
+            mysql.connection.commit()
+            cur.close()
+            return jsonify({"mensaje": "Usuario actualizado correctamente"}), 200
+
+        # --- BORRAR UN USUARIO (DELETE) ---
+        if request.method == 'DELETE':
+            cur = mysql.connection.cursor()
+            cur.execute("DELETE FROM usuario WHERE id_usuario = %s", (id_usuario,))
+            mysql.connection.commit()
+            cur.close()
             return jsonify({"mensaje": "Usuario eliminado exitosamente"}), 200
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({"error": str(e)}), 500
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # --- Ruta de Autenticación (Login) ---
-@usuarios_bp.route('/login', methods=['POST'])
+@app.route('/login', methods=['POST'])
 def login():
-    data = request.json
-    if not data or 'correo' not in data or 'contrasena' not in data:
-        return jsonify({"error": "Faltan 'correo' o 'contrasena'"}), 400
-        
-    usuario = Usuario.query.filter_by(correo=data['correo']).first()
+    # Intentar obtener JSON del cuerpo
+    data = request.get_json(silent=True)
     
-    # Verificamos si el usuario existe Y si la contraseña es correcta
-    if not usuario or not check_password_hash(usuario.contrasena_hash, data['contrasena']):
-        return jsonify({"error": "Credenciales inválidas"}), 401 # 401 Unauthorized
-        
-    # En un caso real, aquí generarías un Token (JWT)
-    # Por ahora, solo confirmamos el éxito
-    
-    return jsonify({
-        "mensaje": "Login exitoso",
-        "usuario": usuario.serialize()
-    }), 200
+    username = ""
+    password = ""
+
+    # Soporte para JSON body (Recomendado)
+    if data and 'username' in data and 'password' in data:
+        username = data['username'] # El frontend envía el email en este campo
+        password = data['password']
+    # Fallback para Basic Auth (Header)
+    elif request.authorization:
+        username = request.authorization.username
+        password = request.authorization.password
+    else:
+        return jsonify({"message": "Credenciales no proporcionadas"}), 400
+
+    try:
+        cur = mysql.connection.cursor()
+        # Buscamos el usuario por correo
+        cur.execute("SELECT * FROM usuario WHERE correo = %s", (username,))
+        user_data = cur.fetchone()
+        cur.close()
+
+        if not user_data:
+            return jsonify({"message": "Usuario o contraseña incorrectos"}), 401
+
+        # Verificar la contraseña
+        if check_password_hash(user_data['contraseña'], password):
+            # Crear objeto usuario para estandarizar la respuesta
+            usuario_obj = Usuario(user_data)
+            resp_json = usuario_obj.to_json()
+            
+            # Generar Token JWT
+            token = jwt.encode({
+                'id_usuario': user_data['id_usuario'],
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=100)
+            }, app.config['SECRET_KEY'], algorithm="HS256")
+            
+            # Asegurar que el token sea string (compatibilidad versiones PyJWT)
+            if isinstance(token, bytes):
+                token = token.decode('utf-8')
+
+            resp_json['token'] = token
+            
+            return jsonify(resp_json), 200
+        else:
+            return jsonify({"message": "Usuario o contraseña incorrectos"}), 401
+
+    except Exception as ex:
+        return jsonify({'message': 'Error interno del servidor: ' + str(ex)}), 500
