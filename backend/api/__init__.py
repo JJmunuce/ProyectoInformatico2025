@@ -13,7 +13,7 @@ app.config['MYSQL_USER'] = 'proyecto'
 app.config['MYSQL_PASSWORD'] = 'proyecto' 
 app.config['MYSQL_DB'] = 'turnos'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'supersecreto_dev_fallback')
+#app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'supersecreto_dev_fallback')
 
 mysql = MySQL(app)
 

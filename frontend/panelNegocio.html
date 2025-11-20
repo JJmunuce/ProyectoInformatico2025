@@ -18,7 +18,7 @@
                     Sistema de Gestión de Negocio
                 </h1>
                 <div id="user-info" class="text-sm text-gray-600 flex items-center space-x-4">
-                    <span id="user-id-display">ID Sesión: <strong class="text-blue-600">ANÓNIMO</strong></span>
+                    <span id="user-id-display">Cargando usuario...</span>
                     <button id="logout-button" class="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition">
                         Cerrar Sesión
                     </button>
@@ -49,36 +49,21 @@
     </div>
 
     <script>
-        
-        let userId = localStorage.getItem('activeUserId') || crypto.randomUUID(); // Usar el ID de sesión
-        let userRole = localStorage.getItem('activeUserRole'); // NUEVO: Obtener el rol
+        // --- CONFIGURACIÓN Y VARIABLES GLOBALES ---
+        const API_URL = 'http://localhost:5000/api';
+        let token = localStorage.getItem('activeUserToken');
+        let activeUserRole = localStorage.getItem('activeUserRole');
+        let activeUserName = localStorage.getItem('activeUserName');
 
         let currentView = 'servicios';
         
-        // --- Variables de Datos Locales ---
-        let services = []; // Lista de servicios
-        let clients = [];  // Lista de clientes
-        let appointments = []; // Lista de turnos
+        // Listas locales para renderizado (se llenan desde el backend)
+        let services = []; 
+        let clients = [];  
+        let professionals = []; // NUEVO: Necesario para crear turnos
+        let appointments = []; 
 
-        // --- Funciones de Persistencia (Local Storage) ---
-
-        function loadData() {
-            services = JSON.parse(localStorage.getItem('services')) || [];
-            clients = JSON.parse(localStorage.getItem('clients')) || [];
-            appointments = JSON.parse(localStorage.getItem('appointments')) || [];
-            // Simular ordenamiento de turnos (importante al cargar)
-            appointments.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-            console.log("Datos cargados de LocalStorage.");
-        }
-
-        function saveData() {
-            localStorage.setItem('services', JSON.stringify(services));
-            localStorage.setItem('clients', JSON.stringify(clients));
-            localStorage.setItem('appointments', JSON.stringify(appointments));
-            console.log("Datos guardados en LocalStorage.");
-        }
-
-        // --- Función de utilidad para mostrar mensajes ---
+        // --- FUNCIONES DE UTILIDAD ---
         function showMessage(message, type = 'success') {
             const container = document.getElementById('message-container');
             const color = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500';
@@ -87,46 +72,89 @@
             element.textContent = message;
             
             container.appendChild(element);
-
-            // Desaparecer después de 4 segundos
             setTimeout(() => {
-                element.classList.replace('translate-x-0', 'translate-x-full');
                 element.classList.replace('opacity-100', 'opacity-0');
-                element.addEventListener('transitionend', () => element.remove());
+                setTimeout(() => element.remove(), 500);
             }, 4000);
         }
 
-        // --- 1. Inicialización y Autenticación Simulado (Validación de rol) ---
-        function initApp() {
-            // NUEVO: Validar Rol
-            if (userRole !== 'gestor') {
-                alert('Acceso Denegado. Esta página es solo para Gestores/Profesionales. Redirigiendo al Login.');
-                localStorage.removeItem('activeUserId');
-                localStorage.removeItem('activeUserRole');
+        // --- 1. INICIALIZACIÓN Y CARGA DE DATOS ---
+        async function initApp() {
+            if (!token || activeUserRole !== 'gestor') {
+                alert('Acceso Denegado. Inicia sesión como Gestor.');
                 window.location.href = 'login.html';
                 return;
             }
 
-            // Cargar datos al inicio
-            loadData();
-            
-            // Mostrar info de usuario (simulado)
             document.getElementById('user-id-display').innerHTML = `
-                ID Sesión: <strong class="text-blue-600">${userId.substring(0, 8)}... (Gestor)</strong>
+                Usuario: <strong class="text-blue-600">${activeUserName || 'Gestor'}</strong>
             `;
 
-            // Configurar logout
             document.getElementById('logout-button').onclick = () => {
-                localStorage.removeItem('activeUserId');
-                localStorage.removeItem('activeUserRole'); // Limpiar el rol
-                window.location.href = 'login.html'; // Redirigir a la página de login
+                localStorage.clear();
+                window.location.href = 'login.html';
             };
 
-            // Renderizar la vista inicial
+            await loadDataFromBackend();
             renderView(currentView);
         }
 
-        // --- 2. Lógica de Navegación y Renderizado (SIN CAMBIOS) ---
+        async function loadDataFromBackend() {
+            try {
+                const headers = { 'Content-Type': 'application/json', 'x-access-token': token };
+
+                // 1. Servicios
+                const resServ = await fetch(`${API_URL}/servicios`, { headers });
+                const dataServ = await resServ.json();
+                // Mapear campos de BD a Frontend
+                services = dataServ.map(s => ({
+                    id: s.id_servicio,
+                    name: s.nombre,
+                    duration: s.duracion_minutos,
+                    price: 0, // Tu BD no tiene precio aún, ponemos 0 por defecto
+                    id_negocio: s.id_negocio
+                }));
+
+                // 2. Clientes
+                const resCli = await fetch(`${API_URL}/clientes`, { headers });
+                const dataCli = await resCli.json();
+                clients = dataCli.map(c => ({
+                    id: c.id_cliente,
+                    name: c.nombre,
+                    phone: c.telefono,
+                    email: 'No registrado' // Tu BD no tiene email en tabla cliente
+                }));
+
+                // 3. Profesionales (NUEVO: Requerido para Turnos)
+                const resProf = await fetch(`${API_URL}/profesionales`, { headers });
+                const dataProf = await resProf.json();
+                professionals = dataProf.map(p => ({
+                    id: p.id_profesional,
+                    name: p.nombre
+                }));
+
+                // 4. Turnos
+                const resTurnos = await fetch(`${API_URL}/turnos`, { headers });
+                const dataTurnos = await resTurnos.json();
+                appointments = dataTurnos.map(t => ({
+                    id: t.id_turno,
+                    clientId: t.id_cliente,
+                    serviceId: t.id_servicio,
+                    profesionalId: t.id_profesional,
+                    // Combinar fecha y hora para el frontend
+                    dateTime: `${t.fecha}T${t.hora}`, 
+                    status: t.estado
+                })).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+                console.log("Datos sincronizados con Backend");
+
+            } catch (error) {
+                console.error("Error cargando datos:", error);
+                showMessage("Error de conexión con el servidor.", "error");
+            }
+        }
+
+        // --- 2. RENDERIZADO Y NAVEGACIÓN ---
 
         document.querySelectorAll('.nav-tab').forEach(button => {
             button.addEventListener('click', (e) => {
@@ -138,9 +166,8 @@
         function renderView(viewName) {
             currentView = viewName;
             const container = document.getElementById('content-container');
-            container.innerHTML = ''; // Limpiar contenido anterior
+            container.innerHTML = '';
 
-            // Actualizar el estilo de la pestaña activa
             document.querySelectorAll('.nav-tab').forEach(btn => {
                 const isActive = btn.getAttribute('data-view') === viewName;
                 btn.className = isActive
@@ -165,55 +192,42 @@
                     container.innerHTML = renderReportsView();
                     break;
                 default:
-                    container.innerHTML = `<div class="text-center p-10 text-gray-500">Vista no encontrada.</div>`;
+                    container.innerHTML = `<div class="text-center p-10">Vista no encontrada.</div>`;
             }
         }
 
-        // --- 3. Renderizado de Vistas Específicas (SIN CAMBIOS) ---
+        // --- 3. VISTAS (HTML TEMPLATES) ---
 
         function renderServicesView() {
             const serviceList = services.map(s => `
                 <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
-                    <div class="flex-grow">
+                    <div>
                         <p class="text-lg font-semibold text-gray-800">${s.name}</p>
-                        <p class="text-sm text-gray-500">${s.duration} min | $${s.price.toFixed(2)}</p>
+                        <p class="text-sm text-gray-500">${s.duration} min</p>
                     </div>
-                    <button data-id="${s.id}" class="delete-service-btn bg-red-100 text-red-700 hover:bg-red-200 p-2 rounded-full transition ml-4" title="Eliminar servicio">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 102 0v6a1 1 0 10-2 0V8z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
+                    <button class="text-gray-400 hover:text-red-500 cursor-not-allowed" title="Eliminar no disponible aún">🗑️</button>
                 </div>
             `).join('');
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Crear Nuevo Servicio</h2>
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Crear Servicio</h2>
                         <form id="service-form" class="space-y-4">
                             <div>
-                                <label for="service-name" class="block text-sm font-medium text-gray-700">Nombre del Servicio</label>
-                                <input type="text" id="service-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" placeholder="Ej: Corte de Cabello">
+                                <label class="block text-sm font-medium text-gray-700">Nombre</label>
+                                <input type="text" id="service-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border" placeholder="Ej: Corte">
                             </div>
                             <div>
-                                <label for="service-duration" class="block text-sm font-medium text-gray-700">Duración (minutos)</label>
-                                <input type="number" id="service-duration" required min="1" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" value="60">
+                                <label class="block text-sm font-medium text-gray-700">Duración (min)</label>
+                                <input type="number" id="service-duration" required min="1" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border" value="30">
                             </div>
-                            <div>
-                                <label for="service-price" class="block text-sm font-medium text-gray-700">Precio ($)</label>
-                                <input type="number" id="service-price" required min="0" step="0.01" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" value="50.00">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition shadow-lg">
-                                Guardar Servicio
-                            </button>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">Guardar</button>
                         </form>
                     </div>
-
                     <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Servicios Disponibles (${services.length})</h2>
-                        <div id="services-list" class="space-y-3">
-                            ${services.length > 0 ? serviceList : '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">No hay servicios registrados. Usa el formulario de la izquierda para agregar uno.</p>'}
-                        </div>
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Servicios (${services.length})</h2>
+                        <div class="space-y-3">${services.length > 0 ? serviceList : '<p class="text-gray-500">No hay servicios.</p>'}</div>
                     </div>
                 </div>
             `;
@@ -222,100 +236,82 @@
         function renderClientsView() {
             const clientList = clients.map(c => `
                 <div class="flex justify-between items-start bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
-                    <div class="flex-grow">
+                    <div>
                         <p class="text-lg font-semibold text-gray-800">${c.name}</p>
-                        <p class="text-sm text-gray-500">Email: ${c.email}</p>
                         <p class="text-sm text-gray-500">Tel: ${c.phone}</p>
                     </div>
-                    <button data-id="${c.id}" class="delete-client-btn bg-red-100 text-red-700 hover:bg-red-200 p-2 rounded-full transition ml-4" title="Eliminar cliente">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 102 0v6a1 1 0 10-2 0V8z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
                 </div>
             `).join('');
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Registrar Nuevo Cliente</h2>
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Registrar Cliente</h2>
                         <form id="client-form" class="space-y-4">
                             <div>
-                                <label for="client-name" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
-                                <input type="text" id="client-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" placeholder="Ej: Juan Pérez">
+                                <label class="block text-sm font-medium text-gray-700">Nombre Completo</label>
+                                <input type="text" id="client-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border">
                             </div>
                             <div>
-                                <label for="client-email" class="block text-sm font-medium text-gray-700">Email</label>
-                                <input type="email" id="client-email" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" placeholder="ejemplo@correo.com">
+                                <label class="block text-sm font-medium text-gray-700">Teléfono</label>
+                                <input type="tel" id="client-phone" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border">
                             </div>
-                            <div>
-                                <label for="client-phone" class="block text-sm font-medium text-gray-700">Teléfono</label>
-                                <input type="tel" id="client-phone" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3" placeholder="Ej: 555-1234">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition shadow-lg">
-                                Guardar Cliente
-                            </button>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">Guardar</button>
                         </form>
                     </div>
-
                     <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Clientes Registrados (${clients.length})</h2>
-                        <div id="clients-list" class="space-y-3">
-                            ${clients.length > 0 ? clientList : '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">No hay clientes registrados. Usa el formulario de la izquierda para agregar uno.</p>'}
-                        </div>
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Clientes (${clients.length})</h2>
+                        <div class="space-y-3">${clients.length > 0 ? clientList : '<p class="text-gray-500">No hay clientes.</p>'}</div>
                     </div>
                 </div>
             `;
         }
-        
+
         function renderAppointmentsView() {
             const clientOptions = clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-            const serviceOptions = services.map(s => `<option value="${s.id}" data-duration="${s.duration}">${s.name} (${s.duration} min)</option>`).join('');
+            const serviceOptions = services.map(s => `<option value="${s.id}">${s.name} (${s.duration} min)</option>`).join('');
+            const profOptions = professionals.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
             
-            // Determinar la fecha y hora mínima (hoy) para el input
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hour = String(now.getHours()).padStart(2, '0');
-            const minute = String(now.getMinutes()).padStart(2, '0');
-            const minDateTime = `${year}-${month}-${day}T${hour}:${minute}`;
+            const now = new Date().toISOString().slice(0, 16);
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Agendar Nuevo Turno</h2>
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Agendar Turno</h2>
                         <form id="appointment-form" class="space-y-4">
                             <div>
-                                <label for="appointment-client" class="block text-sm font-medium text-gray-700">Cliente</label>
-                                <select id="appointment-client" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3">
-                                    <option value="" disabled selected>Selecciona un cliente</option>
+                                <label class="block text-sm font-medium text-gray-700">Cliente</label>
+                                <select id="appointment-client" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
+                                    <option value="" disabled selected>Seleccionar...</option>
                                     ${clientOptions}
                                 </select>
-                                ${clients.length === 0 ? '<p class="text-red-500 text-xs mt-1">Primero registra un cliente en la sección Clientes.</p>' : ''}
                             </div>
                             <div>
-                                <label for="appointment-service" class="block text-sm font-medium text-gray-700">Servicio</label>
-                                <select id="appointment-service" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3">
-                                    <option value="" disabled selected>Selecciona un servicio</option>
+                                <label class="block text-sm font-medium text-gray-700">Profesional</label>
+                                <select id="appointment-prof" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
+                                    <option value="" disabled selected>Seleccionar...</option>
+                                    ${profOptions}
+                                </select>
+                                ${professionals.length === 0 ? '<p class="text-xs text-red-500">¡Crea un profesional en BD primero!</p>' : ''}
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Servicio</label>
+                                <select id="appointment-service" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
+                                    <option value="" disabled selected>Seleccionar...</option>
                                     ${serviceOptions}
                                 </select>
-                                ${services.length === 0 ? '<p class="text-red-500 text-xs mt-1">Primero registra un servicio en la sección Servicios.</p>' : ''}
                             </div>
                             <div>
-                                <label for="appointment-datetime" class="block text-sm font-medium text-gray-700">Fecha y Hora</label>
-                                <input type="datetime-local" id="appointment-datetime" required min="${minDateTime}" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3">
+                                <label class="block text-sm font-medium text-gray-700">Fecha y Hora</label>
+                                <input type="datetime-local" id="appointment-datetime" required min="${now}" class="mt-1 block w-full rounded-lg border p-3">
                             </div>
-                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition shadow-lg" ${clients.length === 0 || services.length === 0 ? 'disabled' : ''}>
-                                Confirmar Turno
-                            </button>
+                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition">Confirmar Turno</button>
                         </form>
                     </div>
 
                     <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Próximos Turnos</h2>
-                        <p class="text-sm text-gray-500 mb-4">Muestra los turnos pendientes, ordenados por fecha.</p>
-                        <div id="upcoming-appointments-list" class="space-y-3">
+                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Próximos Turnos</h2>
+                        <div class="space-y-3">
                             ${renderUpcomingAppointments()}
                         </div>
                     </div>
@@ -323,116 +319,53 @@
             `;
         }
 
-        function renderReportsView() {
-             const upcomingAppointments = appointments.filter(a => new Date(a.dateTime) >= new Date());
-             const pastAppointments = appointments.filter(a => new Date(a.dateTime) < new Date());
-
-             return `
-                 <div class="space-y-8">
-                     <div class="p-6 bg-white rounded-xl shadow-xl">
-                         <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Resumen General</h2>
-                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                             <div class="p-4 bg-blue-50 rounded-lg">
-                                 <p class="text-3xl font-bold text-blue-600">${services.length}</p>
-                                 <p class="text-sm text-gray-600">Total Servicios</p>
-                             </div>
-                             <div class="p-4 bg-green-50 rounded-lg">
-                                 <p class="text-3xl font-bold text-green-600">${clients.length}</p>
-                                 <p class="text-sm text-gray-600">Total Clientes</p>
-                             </div>
-                             <div class="p-4 bg-yellow-50 rounded-lg">
-                                 <p class="text-3xl font-bold text-yellow-600">${upcomingAppointments.length}</p>
-                                 <p class="text-sm text-gray-600">Turnos Pendientes</p>
-                             </div>
-                             <div class="p-4 bg-red-50 rounded-lg">
-                                 <p class="text-3xl font-bold text-red-600">${pastAppointments.length}</p>
-                                 <p class="text-sm text-gray-600">Turnos Completados</p>
-                             </div>
-                         </div>
-                     </div>
-                     
-                     <div class="p-6 bg-white rounded-xl shadow-xl">
-                         <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Reporte de Turnos Pendientes</h2>
-                         <div class="space-y-3">
-                             ${upcomingAppointments.length > 0 ? upcomingAppointments.map(a => renderAppointmentCard(a)).join('') : '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">¡Estás al día! No hay turnos pendientes.</p>'}
-                         </div>
-                     </div>
-
-                     <div class="p-6 bg-white rounded-xl shadow-xl">
-                         <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Reporte de Ingresos Proyectados (Turnos Pendientes)</h2>
-                         ${renderProjectedIncome(upcomingAppointments)}
-                     </div>
-                 </div>
-             `;
-         }
-
-        function renderProjectedIncome(upcomingAppointments) {
-            let totalIncome = 0;
-            upcomingAppointments.forEach(a => {
-                const service = services.find(s => s.id === a.serviceId);
-                if (service) {
-                    totalIncome += service.price;
-                }
-            });
-
-            if (upcomingAppointments.length === 0) {
-                return '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">No hay turnos pendientes para calcular el ingreso proyectado.</p>';
-            }
-
-            return `
-                <div class="text-center p-4 bg-indigo-50 rounded-lg">
-                    <p class="text-xl font-medium text-gray-700">Ingreso total proyectado de ${upcomingAppointments.length} turnos:</p>
-                    <p class="text-5xl font-extrabold text-indigo-700 mt-2">$${totalIncome.toFixed(2)}</p>
-                </div>
-            `;
-        }
-
         function renderUpcomingAppointments() {
-            // Muestra solo turnos futuros
-            const upcoming = appointments.filter(a => new Date(a.dateTime) >= new Date());
+            const upcoming = appointments.filter(a => new Date(a.dateTime) >= new Date() && a.status !== 'cancelado');
+            if (upcoming.length === 0) return '<p class="text-gray-500">No hay turnos pendientes.</p>';
 
-            if (upcoming.length === 0) {
-                return '<p class="text-gray-500 p-4 border rounded-lg bg-gray-50">No hay turnos pendientes. ¡Programa uno!</p>';
-            }
+            return upcoming.map(a => {
+                const client = clients.find(c => c.id === a.clientId) || { name: 'Desconocido' };
+                const service = services.find(s => s.id === a.serviceId) || { name: 'Desconocido', duration: 0 };
+                const prof = professionals.find(p => p.id === a.profesionalId) || { name: 'Desconocido' };
+                const dateObj = new Date(a.dateTime);
 
-            return upcoming.map(a => renderAppointmentCard(a)).join('');
+                return `
+                    <div class="flex items-start bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
+                        <div class="flex-grow">
+                            <p class="text-lg font-bold text-gray-900">
+                                ${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </p>
+                            <p class="text-md font-semibold text-gray-700">${service.name} con ${client.name}</p>
+                            <p class="text-sm text-gray-500">Prof: ${prof.name} | ${service.duration} min</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
-        function renderAppointmentCard(a) {
-            const client = clients.find(c => c.id === a.clientId);
-            const service = services.find(s => s.id === a.serviceId);
-
-            const clientName = client ? client.name : 'Cliente Desconocido';
-            const serviceName = service ? service.name : 'Servicio Desconocido';
-            const price = service ? `$${service.price.toFixed(2)}` : 'N/A';
-            const duration = service ? `${service.duration} min` : 'N/A';
-
-            const date = new Date(a.dateTime);
-            const dateStr = date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-            const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-
+        function renderReportsView() {
             return `
-                <div class="appointment-card flex items-start bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
-                    <div class="flex-shrink-0 mr-4 mt-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L11 9.586V6z" clip-rule="evenodd" />
-                        </svg>
+                <div class="p-6 bg-white rounded-xl shadow-xl text-center">
+                    <h2 class="text-2xl font-bold text-gray-800">Reportes</h2>
+                    <div class="grid grid-cols-2 gap-4 mt-6">
+                        <div class="p-4 bg-blue-50 rounded-lg">
+                            <p class="text-3xl font-bold text-blue-600">${services.length}</p>
+                            <p>Servicios</p>
+                        </div>
+                        <div class="p-4 bg-green-50 rounded-lg">
+                            <p class="text-3xl font-bold text-green-600">${clients.length}</p>
+                            <p>Clientes</p>
+                        </div>
+                        <div class="p-4 bg-yellow-50 rounded-lg">
+                            <p class="text-3xl font-bold text-yellow-600">${appointments.length}</p>
+                            <p>Turnos Totales</p>
+                        </div>
                     </div>
-                    <div class="flex-grow">
-                        <p class="text-lg font-bold text-gray-900">${dateStr} <span class="text-blue-600 ml-1">${timeStr}</span></p>
-                        <p class="text-md font-semibold text-gray-700 mt-1">${serviceName} con ${clientName}</p>
-                        <p class="text-sm text-gray-500">${price} | ${duration}</p>
-                    </div>
-                    <button data-id="${a.id}" class="delete-appointment-btn bg-red-100 text-red-700 hover:bg-red-200 p-2 rounded-full transition ml-4" title="Cancelar Turno">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 102 0v6a1 1 0 10-2 0V8z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
                 </div>
             `;
         }
 
-        // --- 4. Lógica de Eventos y CRUD para Servicios (Local) (SIN CAMBIOS) ---
+        // --- 4. MANEJADORES DE EVENTOS (POST REQUESTS) ---
 
         function setupServiceEventListeners() {
             const form = document.getElementById('service-form');
@@ -440,43 +373,31 @@
                 form.onsubmit = async (e) => {
                     e.preventDefault();
                     const name = document.getElementById('service-name').value.trim();
-                    const duration = parseInt(document.getElementById('service-duration').value, 10);
-                    const price = parseFloat(document.getElementById('service-price').value);
+                    const duration = parseInt(document.getElementById('service-duration').value);
 
-                    if (!name || isNaN(duration) || isNaN(price) || duration <= 0 || price < 0) {
-                        showMessage("Por favor, completa todos los campos de servicio correctamente.", 'error');
-                        return;
-                    }
+                    try {
+                        const res = await fetch(`${API_URL}/servicios`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+                            body: JSON.stringify({
+                                nombre: name,
+                                duracion_minutos: duration,
+                                id_negocio: 1 // ID hardcodeado o dinámico si lo tienes
+                            })
+                        });
 
-                    // Simulación de guardar
-                    const newService = {
-                        id: crypto.randomUUID(),
-                        name,
-                        duration,
-                        price,
-                        createdAt: new Date().toISOString()
-                    };
-                    services.push(newService);
-                    saveData();
-                    
-                    form.reset();
-                    showMessage(`Servicio "${name}" guardado exitosamente.`);
-                    renderView(currentView); // Re-renderizar para actualizar la lista
+                        if (res.ok) {
+                            showMessage('Servicio creado exitosamente');
+                            await loadDataFromBackend();
+                            renderView('servicios');
+                        } else {
+                            const err = await res.json();
+                            showMessage(`Error: ${err.error}`, 'error');
+                        }
+                    } catch (e) { showMessage("Error de conexión", "error"); }
                 };
             }
-
-            document.querySelectorAll('.delete-service-btn').forEach(btn => {
-                btn.onclick = async (e) => {
-                    const serviceId = e.currentTarget.getAttribute('data-id');
-                    services = services.filter(s => s.id !== serviceId);
-                    saveData();
-                    showMessage("Servicio eliminado correctamente.");
-                    renderView(currentView); // Re-renderizar para actualizar la lista
-                };
-            });
         }
-
-        // --- 5. Lógica de Eventos y CRUD para Clientes (Local) (SIN CAMBIOS) ---
 
         function setupClientEventListeners() {
             const form = document.getElementById('client-form');
@@ -484,43 +405,31 @@
                 form.onsubmit = async (e) => {
                     e.preventDefault();
                     const name = document.getElementById('client-name').value.trim();
-                    const email = document.getElementById('client-email').value.trim();
                     const phone = document.getElementById('client-phone').value.trim();
 
-                    if (!name || !email || !phone) {
-                        showMessage("Por favor, completa todos los campos de cliente.", 'error');
-                        return;
-                    }
+                    try {
+                        const res = await fetch(`${API_URL}/clientes`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+                            body: JSON.stringify({
+                                nombre: name,
+                                telefono: phone,
+                                id_negocio: 1
+                            })
+                        });
 
-                    // Simulación de guardar
-                    const newClient = {
-                        id: crypto.randomUUID(),
-                        name,
-                        email,
-                        phone,
-                        createdAt: new Date().toISOString()
-                    };
-                    clients.push(newClient);
-                    saveData();
-                    
-                    form.reset();
-                    showMessage(`Cliente "${name}" registrado exitosamente.`);
-                    renderView(currentView); // Re-renderizar
+                        if (res.ok) {
+                            showMessage('Cliente registrado');
+                            await loadDataFromBackend();
+                            renderView('clientes');
+                        } else {
+                            const err = await res.json();
+                            showMessage(`Error: ${err.error}`, 'error');
+                        }
+                    } catch (e) { showMessage("Error de conexión", "error"); }
                 };
             }
-
-            document.querySelectorAll('.delete-client-btn').forEach(btn => {
-                btn.onclick = async (e) => {
-                    const clientId = e.currentTarget.getAttribute('data-id');
-                    clients = clients.filter(c => c.id !== clientId);
-                    saveData();
-                    showMessage("Cliente eliminado correctamente.");
-                    renderView(currentView); // Re-renderizar
-                };
-            });
         }
-
-        // --- 6. Lógica de Eventos y CRUD para Turnos (Appointments) (Local) (SIN CAMBIOS) ---
 
         function setupAppointmentEventListeners() {
             const form = document.getElementById('appointment-form');
@@ -528,51 +437,52 @@
                 form.onsubmit = async (e) => {
                     e.preventDefault();
                     const clientId = document.getElementById('appointment-client').value;
+                    const profId = document.getElementById('appointment-prof').value;
                     const serviceId = document.getElementById('appointment-service').value;
-                    const dateTime = document.getElementById('appointment-datetime').value;
+                    const datetimeVal = document.getElementById('appointment-datetime').value;
 
-                    if (!clientId || !serviceId || !dateTime) {
-                        showMessage("Por favor, selecciona cliente, servicio, fecha y hora.", 'error');
+                    if (!clientId || !profId || !serviceId || !datetimeVal) {
+                        showMessage("Completa todos los campos", "warning");
                         return;
                     }
 
-                    const appointmentDate = new Date(dateTime);
-                    if (appointmentDate < new Date()) {
-                        showMessage("No se pueden agendar turnos en el pasado.", 'error');
-                        return;
-                    }
+                    // Separar fecha y hora para el backend (YYYY-MM-DD y HH:MM)
+                    const dateObj = new Date(datetimeVal);
+                    const fecha = datetimeVal.split('T')[0];
+                    const hora = datetimeVal.split('T')[1];
 
-                    // Simulación de guardar
-                    const newAppointment = {
-                        id: crypto.randomUUID(),
-                        clientId,
-                        serviceId,
-                        dateTime: appointmentDate.toISOString(), // Guardar en formato ISO
-                        status: 'pending',
-                        createdAt: new Date().toISOString()
-                    };
-                    appointments.push(newAppointment);
-                    appointments.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime)); // Re-ordenar
-                    saveData();
-                    
-                    form.reset();
-                    showMessage("¡Turno agendado con éxito!", 'success');
-                    renderView(currentView); // Re-renderizar
+                    try {
+                        const res = await fetch(`${API_URL}/turnos`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+                            body: JSON.stringify({
+                                id_cliente: clientId,
+                                id_profesional: profId,
+                                id_servicio: serviceId,
+                                fecha: fecha,
+                                hora: hora
+                            })
+                        });
+
+                        if (res.ok) { // Código 201
+                            showMessage('¡Turno agendado con éxito!');
+                            await loadDataFromBackend();
+                            renderView('turnos');
+                        } else {
+                            const err = await res.json();
+                            // Manejo específico del error de conflicto (Código 500 o 409 según tu backend)
+                            if (err.error && err.error.includes('ocupado')) {
+                                showMessage('⚠️ CONFLICTO: El profesional ya está ocupado en ese horario.', 'error');
+                            } else {
+                                showMessage(`Error: ${err.error}`, 'error');
+                            }
+                        }
+                    } catch (e) { showMessage("Error de conexión", "error"); }
                 };
             }
-
-            document.querySelectorAll('.delete-appointment-btn').forEach(btn => {
-                btn.onclick = async (e) => {
-                    const appointmentId = e.currentTarget.getAttribute('data-id');
-                    appointments = appointments.filter(a => a.id !== appointmentId);
-                    saveData();
-                    showMessage("Turno cancelado correctamente.");
-                    renderView(currentView); // Re-renderizar
-                };
-            });
         }
-        
-        // Iniciar la aplicación al cargar la ventana
+
+        // Iniciar
         window.onload = initApp;
 
     </script>
