@@ -19,6 +19,7 @@ class Usuario():
             'id_negocio': self._id_negocio
         }
     
+    
     @classmethod
     def create(cls, data):
         from api import app, mysql
