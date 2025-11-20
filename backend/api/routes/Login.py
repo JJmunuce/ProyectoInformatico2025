@@ -3,11 +3,11 @@ from api import app
 
 # Importa clases y módulos necesarios desde 'flask', y 'api.models.Usuario'
 from flask import request, jsonify
-from api.models.Usuario import Usuario
+from api.models.usuario import Usuario
 
 # Ruta para manejar el proceso de inicio de sesión (login)
 @app.route('/login', methods=['POST'])
-def login():
+def login_post():
     """
     Maneja el proceso de inicio de sesión (login) para un usuario.
 
