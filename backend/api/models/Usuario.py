@@ -1,4 +1,3 @@
-from api import app, mysql
 from werkzeug.security import generate_password_hash
 
 class Usuario():
@@ -22,6 +21,7 @@ class Usuario():
     
     @classmethod
     def create(cls, data):
+        from api import app, mysql
         """
         Método para registrar un nuevo usuario (Usado por usuario_routes.py)
         """
