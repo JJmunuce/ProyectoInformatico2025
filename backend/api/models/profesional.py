@@ -14,9 +14,23 @@ class Profesional:
         }
 
     @classmethod
-    def get_all(cls):
+    def get_all(cls, id_negocio): # <--- Recibe id_negocio
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM profesional")
+        # Filtramos por negocio
+        cur.execute("SELECT * FROM profesional WHERE id_negocio = %s", (id_negocio,))
+        rows = cur.fetchall()
+        cur.close()
+        return [cls(row).to_json() for row in rows]
+
+    @classmethod
+    def get_by_servicio(cls, id_servicio):
+        cur = mysql.connection.cursor()
+        query = """
+            SELECT p.* FROM profesional p
+            JOIN servicio_profesional sp ON p.id_profesional = sp.id_profesional
+            WHERE sp.id_servicio = %s
+        """
+        cur.execute(query, (id_servicio,))
         rows = cur.fetchall()
         cur.close()
         return [cls(row).to_json() for row in rows]
@@ -29,4 +43,27 @@ class Profesional:
         mysql.connection.commit()
         cur.close()
         return {"mensaje": "Profesional creado exitosamente"}
-    
+
+    @classmethod
+    def get_services(cls, id_profesional):
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT id_servicio FROM servicio_profesional WHERE id_profesional = %s", (id_profesional,))
+        rows = cur.fetchall()
+        cur.close()
+        return [row['id_servicio'] for row in rows]
+
+    @classmethod
+    def assign_service(cls, id_profesional, id_servicio):
+        cur = mysql.connection.cursor()
+        cur.execute("INSERT IGNORE INTO servicio_profesional (id_profesional, id_servicio) VALUES (%s, %s)", (id_profesional, id_servicio))
+        mysql.connection.commit()
+        cur.close()
+        return {"mensaje": "Servicio asignado"}
+
+    @classmethod
+    def remove_service(cls, id_profesional, id_servicio):
+        cur = mysql.connection.cursor()
+        cur.execute("DELETE FROM servicio_profesional WHERE id_profesional = %s AND id_servicio = %s", (id_profesional, id_servicio))
+        mysql.connection.commit()
+        cur.close()
+        return {"mensaje": "Servicio removido"}

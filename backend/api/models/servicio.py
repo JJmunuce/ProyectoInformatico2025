@@ -16,9 +16,10 @@ class Servicio:
         }
 
     @classmethod
-    def get_all(cls):
+    def get_all(cls, id_negocio):
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM servicio")
+        # Filtramos por negocio
+        cur.execute("SELECT * FROM servicio WHERE id_negocio = %s", (id_negocio,))
         rows = cur.fetchall()
         cur.close()
         return [cls(row).to_json() for row in rows]

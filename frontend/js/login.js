@@ -1,128 +1,138 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Referencias al DOM
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-    
-    // --- LÓGICA DE LOGIN (CONECTADA AL BACKEND) ---
-    if (loginForm) {
-        loginForm.addEventListener('submit', async function(e) {
+// frontend/js/login.js
+// Lógica reducida: login y toggle de contraseña
+
+(function () {
+    const API_BASE = "http://127.0.0.1:5000";
+
+    const EYE_OPEN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+</svg>`;
+
+    const EYE_CLOSED_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18"/>
+  <path stroke-linecap="round" stroke-linejoin="round" d="M9.88 9.88A3 3 0 0114.12 14.12"/>
+  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c1.3 0 2.544.27 3.667.75"/>
+</svg>`;
+
+    function alertModal(message, type = 'info', callback = null) {
+        const container = document.getElementById('alert-modal-container');
+        container.innerHTML = '';
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50';
+        let color = type === 'error' ? 'text-red-500' : type === 'success' ? 'text-blue-600' : 'text-orange-500';
+        let btnColor = type === 'error' ? 'bg-red-500 hover:bg-red-600' : type === 'success' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-500 hover:bg-orange-600';
+
+        modal.innerHTML = `
+            <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl max-w-sm mx-4 border border-gray-100">
+                <h5 class="text-2xl font-bold mb-4 ${color}">${type === 'error' ? 'Error' : '¡Éxito!'}</h5>
+                <p class="text-gray-600 mb-6">${message}</p>
+                <button id="close-modal" class="w-full px-4 py-3 ${btnColor} text-white rounded-xl font-bold transition">Aceptar</button>
+            </div>
+        `;
+        container.appendChild(modal);
+        document.getElementById('close-modal').onclick = () => {
+            container.innerHTML = '';
+            if (callback) callback();
+        };
+    }
+
+    function setLoading(formId, isLoading) {
+        const btn = document.querySelector(`#${formId}-form button`);
+        if (!btn) return;
+        if (isLoading) {
+            btn.disabled = true;
+            btn.textContent = 'Cargando...';
+            btn.classList.add('opacity-70', 'cursor-not-allowed');
+        } else {
+            btn.disabled = false;
+            btn.textContent = 'Iniciar Sesión';
+            btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
+    }
+
+    function setupPasswordToggle(inputId, btnId, iconId) {
+        const input = document.getElementById(inputId);
+        const btn = document.getElementById(btnId);
+        const icon = document.getElementById(iconId);
+        if (!input || !btn || !icon) return;
+
+        btn.addEventListener('click', (e) => {
             e.preventDefault();
-            
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value;
-            const role = document.getElementById('role-select').value; // 'gestor' o 'cliente'
-
-            if (!role) {
-                alertModal("Por favor, selecciona tu rol.", 'error');
-                return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.setAttribute('aria-pressed', 'true');
+                btn.innerHTML = EYE_OPEN_SVG;
+            } else {
+                input.type = 'password';
+                btn.setAttribute('aria-pressed', 'false');
+                btn.innerHTML = EYE_CLOSED_SVG;
             }
+        });
+    }
 
-            setLoading('login', true);
+    async function safeJson(resp) {
+        try {
+            return await resp.json();
+        } catch (_) {
+            return null;
+        }
+    }
 
-            try {
-                // 1. Petición al Backend Real
-                const response = await fetch('http://localhost:5000/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    // Tu backend espera 'username' y 'password'
-                    body: JSON.stringify({ 
-                        username: email, 
-                        password: password 
-                    })
-                });
+    document.addEventListener('DOMContentLoaded', () => {
+        // Setup password toggle for login only
+        setupPasswordToggle('password', 'toggle-password', 'icon-password');
 
-                const data = await response.json();
+        // Login handler
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                if (!email || !password) {
+                    alertModal("Completa usuario y contraseña.", 'error');
+                    return;
+                }
 
-                if (response.ok) {
-                    // 2. Guardar datos reales en LocalStorage
-                    // El backend devuelve: id_usuario, nombre, correo, id_negocio, token
-                    localStorage.setItem('activeUserId', data.id_usuario);
-                    localStorage.setItem('activeUserName', data.nombre);
-                    localStorage.setItem('activeUserToken', data.token); // IMPORTANTE: El Token JWT
-                    localStorage.setItem('activeUserRole', role);
-                    
-                    // Guardamos el ID del negocio si existe (para gestores)
-                    if (data.id_negocio) {
-                        localStorage.setItem('activeBusinessId', data.id_negocio);
-                    }
+                setLoading('login', true);
+                try {
+                    const resp = await fetch(`${API_BASE}/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: email, password: password })
+                    });
 
-                    // 3. Redirección según el rol seleccionado
-                    alertModal(`¡Bienvenido ${data.nombre}!`, 'success', () => {
-                        if (role === 'gestor') {
-                            window.location.href = 'panelNegocio.html';
+                    const data = await safeJson(resp);
+
+                    if (resp.ok) {
+                        if (data.id_usuario) localStorage.setItem('activeUserId', data.id_usuario);
+                        if (data.nombre) localStorage.setItem('activeUserName', data.nombre);
+                        if (data.token) localStorage.setItem('activeUserToken', data.token);
+
+                        if (data.id_negocio) {
+                            localStorage.setItem('activeUserRole', 'gestor');
+                            if (data.id_negocio) localStorage.setItem('activeBusinessId', data.id_negocio);
+                            alertModal(`¡Bienvenido ${data.nombre || ''}!`, 'success', () => {
+                                window.location.href = 'panelNegocio.html';
+                            });
                         } else {
-                            window.location.href = 'citas.html';
+                            localStorage.setItem('activeUserRole', 'cliente');
+                            alertModal(`¡Bienvenido ${data.nombre || ''}!`, 'success', () => {
+                                window.location.href = 'citas.html';
+                            });
                         }
-                    });
-
-                } else {
-                    // Error devuelto por el backend (ej: "Usuario o contraseña incorrectos")
-                    alertModal(data.message || "Error al iniciar sesión", 'error');
+                    } else {
+                        const message = (data && (data.message || data.error)) || `Error: ${resp.status}`;
+                        alertModal(message, 'error');
+                    }
+                } catch (err) {
+                    console.error("Error de conexión:", err);
+                    alertModal("No se pudo conectar con el servidor. Asegúrate de que el backend esté corriendo.", 'error');
+                } finally {
+                    setLoading('login', false);
                 }
-
-            } catch (error) {
-                console.error("Error de conexión:", error);
-                alertModal("No se pudo conectar con el servidor. Asegúrate de que el backend esté corriendo.", 'error');
-            } finally {
-                setLoading('login', false);
-            }
-        });
-    }
-
-    // --- LÓGICA DE REGISTRO (CONECTADA AL BACKEND) ---
-    if (registerForm) {
-        registerForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const name = document.getElementById('reg-name').value.trim();
-            const email = document.getElementById('reg-email').value.trim();
-            const password = document.getElementById('reg-password').value;
-            const confirmPassword = document.getElementById('reg-confirm-password').value;
-
-            if (password !== confirmPassword) {
-                alertModal("Las contraseñas no coinciden.", 'error');
-                return;
-            }
-
-            setLoading('register', true);
-
-            try {
-                // 1. Petición de Registro al Backend
-                const response = await fetch('http://localhost:5000/api/usuarios', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        nombre: name,
-                        correo: email,
-                        contraseña: password,
-                        // Por defecto, al registrarse desde aquí, id_negocio es null (Cliente)
-                        
-                        id_negocio: null 
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok || response.status === 201) {
-                    alertModal("¡Registro Exitoso! Ahora inicia sesión.", 'success', () => {
-                        switchView('login-view');
-                    });
-                } else {
-                    alertModal(data.error || "Error al registrarse", 'error');
-                }
-
-            } catch (error) {
-                console.error("Error de registro:", error);
-                alertModal("Error de conexión al intentar registrarse.", 'error');
-            } finally {
-                setLoading('register', false);
-            }
-        });
-    }
-});
-
-// --- FUNCIONES AUXILIARES (Se mantienen igual que antes, pero asegúrate de tenerlas) ---
+            });
+        }
+    });
+})();

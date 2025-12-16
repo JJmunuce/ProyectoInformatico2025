@@ -1,490 +1,463 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestión de Turnos</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Panel de Negocio - TurnosApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+    body { font-family: 'Inter', sans-serif; background: #f9fafb; }
+    .flatpickr-day.flatpickr-disabled { background: #fff0f0 !important; color: #9a1f1f !important; cursor: not-allowed !important; border-radius: 6px; }
+    .slot-btn { display:inline-block; margin:6px; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .slot-available { background:#0ea5e9; color:white; }
+    .slot-occupied { background:#f8d7da; color:#721c24; cursor:not-allowed; opacity:0.8; }
+    .slot-selected { outline:3px solid #0369a1; }
+    .flatpickr-calendar.inline { width: 320px; }
+    @media (min-width: 1024px) { .flatpickr-calendar.inline { width: 380px; } }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
+    .hidden-modal { display: none; }
+    
+    #appointments-list-container::-webkit-scrollbar { width: 6px; }
+    #appointments-list-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    #appointments-list-container::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+    #appointments-list-container::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+  </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <div id="app-container" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        <header class="bg-white shadow-lg rounded-xl mb-6 p-4">
-            <div class="flex flex-col sm:flex-row justify-between items-center">
-                <h1 class="text-3xl font-extrabold text-blue-800 mb-2 sm:mb-0">
-                    Sistema de Gestión de Negocio
-                </h1>
-                <div id="user-info" class="text-sm text-gray-600 flex items-center space-x-4">
-                    <span id="user-id-display">Cargando usuario...</span>
-                    <button id="logout-button" class="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition">
-                        Cerrar Sesión
-                    </button>
-                </div>
-            </div>
-            <nav class="mt-4 border-t pt-4">
-                <div class="flex space-x-2 sm:space-x-4 overflow-x-auto">
-                    <button data-view="servicios" class="nav-tab bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200">
-                        Servicios
-                    </button>
-                    <button data-view="clientes" class="nav-tab text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-lg transition duration-200">
-                        Clientes
-                    </button>
-                    <button data-view="turnos" class="nav-tab text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-lg transition duration-200">
-                        Turnos (Agendar)
-                    </button>
-                    <button data-view="reportes" class="nav-tab text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-lg transition duration-200">
-                        Reportes
-                    </button>
-                </div>
-            </nav>
-        </header>
+<body class="min-h-screen p-6">
+  <div class="max-w-7xl mx-auto">
+    <header class="bg-white rounded-xl shadow p-6 mb-6 flex items-center justify-between">
+      <h1 class="text-2xl font-extrabold text-blue-800">Sistema de Gestión de Negocio</h1>
+      <div class="flex items-center gap-3">
+        <span id="user-info" class="text-sm text-gray-600">Gestor</span>
+        <button id="btn-logout" class="px-3 py-1 bg-red-500 text-white rounded text-sm">Cerrar Sesión</button>
+      </div>
+    </header>
 
-        <main id="content-container" class="space-y-6">
-            </main>
+    <nav class="mb-6">
+      <div class="flex gap-2">
+        <button data-view="servicios" class="nav-tab py-2 px-4 rounded bg-blue-600 text-white font-semibold">Servicios</button>
+        <button data-view="clientes" class="nav-tab py-2 px-4 rounded hover:bg-gray-100">Clientes</button>
+        <button data-view="profesionales" class="nav-tab py-2 px-4 rounded hover:bg-gray-100">Profesionales</button>
+        <button data-view="turnos" class="nav-tab py-2 px-4 rounded hover:bg-gray-100">Turnos (Agendar)</button>
+      </div>
+    </nav>
 
-        <div id="message-container" class="fixed top-4 right-4 z-50"></div>
+    <main id="content-container" class="min-h-[460px] bg-white rounded-xl shadow p-6"></main>
+    <div id="message-container" class="fixed top-6 right-6 z-50"></div>
+  </div>
+
+  <div id="services-modal" class="modal-overlay hidden-modal">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <h3 class="text-xl font-bold mb-4">Asignar Servicios</h3>
+        <p id="modal-prof-name" class="text-gray-600 mb-4 font-semibold"></p>
+        <div id="modal-services-list" class="max-h-60 overflow-y-auto border rounded p-2 mb-4 space-y-2"></div>
+        <div class="flex justify-end gap-2">
+            <button onclick="document.getElementById('services-modal').classList.add('hidden-modal')" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cerrar</button>
+        </div>
     </div>
+  </div>
 
-    <script>
-        // --- CONFIGURACIÓN Y VARIABLES GLOBALES ---
-        const API_URL = 'http://localhost:5000/api';
-        let token = localStorage.getItem('activeUserToken');
-        let activeUserRole = localStorage.getItem('activeUserRole');
-        let activeUserName = localStorage.getItem('activeUserName');
+  <div id="availability-modal" class="modal-overlay hidden-modal">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+        <h3 class="text-xl font-bold mb-2">Gestionar Horarios</h3>
+        <p id="modal-avail-prof-name" class="text-gray-600 mb-4 font-semibold"></p>
+        <div class="bg-blue-50 p-4 rounded-lg mb-4 border border-blue-100">
+            <h4 class="text-sm font-bold text-blue-800 mb-2">Agregar Disponibilidad</h4>
+            <div class="grid grid-cols-3 gap-2 mb-2">
+                <select id="avail-day" class="border rounded p-1 text-sm">
+                    <option value="0">Lunes</option><option value="1">Martes</option><option value="2">Miércoles</option>
+                    <option value="3">Jueves</option><option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option>
+                </select>
+                <input type="time" id="avail-start" class="border rounded p-1 text-sm" value="08:00">
+                <input type="time" id="avail-end" class="border rounded p-1 text-sm" value="17:00">
+            </div>
+            <button onclick="addAvailability()" class="w-full bg-blue-600 text-white text-sm py-1 rounded hover:bg-blue-700">Agregar Horario</button>
+        </div>
+        <div class="max-h-60 overflow-y-auto">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-700"><tr><th class="p-2">Día</th><th class="p-2">Inicio</th><th class="p-2">Fin</th><th class="p-2"></th></tr></thead>
+                <tbody id="availability-list-body"></tbody>
+            </table>
+        </div>
+        <div class="flex justify-end gap-2 mt-4">
+            <button onclick="document.getElementById('availability-modal').classList.add('hidden-modal'); loadDataFromBackend();" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cerrar</button>
+        </div>
+    </div>
+  </div>
 
-        let currentView = 'servicios';
+<script>
+(function () {
+  const API_URL = 'http://127.0.0.1:5000/api';
+  let services = [], clients = [], professionals = [], appointments = [], disponibilidades = [];
+  const token = localStorage.getItem('activeUserToken');
+  const businessId = localStorage.getItem('activeBusinessId'); 
+  const headers = { 'Content-Type': 'application/json', 'x-access-token': token };
+  let currentProfId = null; 
+
+  function showMessage(text, type='success') {
+    const container = document.getElementById('message-container');
+    const bg = type==='success' ? 'bg-green-500' : type==='error' ? 'bg-red-500' : 'bg-yellow-500';
+    const el = document.createElement('div');
+    el.className = `${bg} text-white px-4 py-2 rounded shadow mb-2`; el.textContent = text;
+    container.appendChild(el); setTimeout(()=>el.remove(), 3500);
+  }
+  
+  function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+  function minutesFromTimeStr(t) { if(!t) return 0; const p = t.split(':'); return (parseInt(p[0])||0)*60 + (parseInt(p[1])||0); }
+  function timeStrFromMinutes(m){ return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+  function rangesOverlap(aS,aE,bS,bE){ return aS < bE && bS < aE; }
+
+  // --- LÓGICA DE HORARIOS (CORREGIDA) ---
+  function generateCandidateSlots(durationMin, fechaStr, profId) {
+    if (!fechaStr || !profId) return [];
+    
+    const jsDay = new Date(fechaStr + 'T00:00:00').getDay();
+    const pyDay = jsDay === 0 ? 6 : jsDay - 1;
+    
+    const ranges = disponibilidades.filter(d => String(d.id_profesional) === String(profId) && parseInt(d.dia_semana) === pyDay);
+    if (ranges.length === 0) return [];
+
+    // CAMBIO AQUÍ: El paso (step) ahora es igual a la duración del servicio
+    const step = durationMin; 
+    const slots = [];
+
+    ranges.forEach(r => {
+        let current = minutesFromTimeStr(r.hora_inicio);
+        const end = minutesFromTimeStr(r.hora_fin);
+        // Generar hasta (fin - duracion)
+        while (current + durationMin <= end) {
+            slots.push(timeStrFromMinutes(current));
+            current += step; // Avanzamos según la duración
+        }
+    });
+    
+    return [...new Set(slots)].sort();
+  }
+
+  function getAvailableTimeSlots(fecha, idProfesional, idServicio) {
+    if (!fecha || !idProfesional || !idServicio) return [];
+    
+    const service = services.find(s => String(s.id_servicio) === String(idServicio));
+    if (!service) return [];
+    
+    const dur = parseInt(service.duracion_minutos)||30;
+    
+    // Pasamos la duración para que los slots se generen con ese intervalo
+    const candidates = generateCandidateSlots(dur, fecha, idProfesional);
+
+    const occupied = appointments
+      .filter(t => String(t.id_profesional) === String(idProfesional) && String(t.fecha) === String(fecha) && t.estado !== 'cancelado')
+      .map(t => {
+        const start = minutesFromTimeStr((t.hora||'').slice(0,5));
+        const servT = services.find(s=>s.id_servicio===t.id_servicio);
+        const servDur = servT ? parseInt(servT.duracion_minutos) : dur;
+        return {start, end: start + servDur};
+      });
+
+    return candidates.filter(slot => {
+      const sStart = minutesFromTimeStr(slot), sEnd = sStart + dur;
+      for (const o of occupied) if (rangesOverlap(sStart, sEnd, o.start, o.end)) return false;
+      return true;
+    });
+  }
+
+  async function loadDataFromBackend() {
+    try {
+      services = await (await fetch(`${API_URL}/servicios`, {headers})).json() || [];
+      clients = await (await fetch(`${API_URL}/clientes`, {headers})).json() || [];
+      professionals = await (await fetch(`${API_URL}/profesionales`, {headers})).json() || [];
+      appointments = await (await fetch(`${API_URL}/turnos`, {headers})).json() || [];
+      disponibilidades = await (await fetch(`${API_URL}/disponibilidades`, {headers})).json() || [];
+    } catch (e) { console.error(e); if(e.status===401) window.location.href='login.html'; showMessage('Error cargando datos','error'); }
+  }
+
+  function renderServicesView() {
+    const list = services.map(s => `
+      <div class="flex justify-between items-center p-4 border rounded mb-3">
+        <div><div class="font-semibold">${escapeHtml(s.nombre)}</div><div class="text-sm text-gray-500">${s.duracion_minutos} min</div></div>
+        <div><button onclick="deleteService(${s.id_servicio})" class="px-2 py-1 text-red-600">🗑️</button></div>
+      </div>`).join('') || '<p class="text-gray-500">No hay servicios.</p>';
+    return `<div class="grid lg:grid-cols-3 gap-6"><div class="p-6 border rounded"><h3 class="font-bold mb-4">Crear Servicio</h3><form id="service-form" class="space-y-3"><div><label class="text-sm">Nombre</label><input id="service-name" class="w-full border rounded p-2" required /></div><div><label class="text-sm">Duración (min)</label><input id="service-duration" type="number" value="30" min="1" class="w-full border rounded p-2" required /></div><div><button type="submit" class="w-full bg-blue-600 text-white rounded py-2">Guardar</button></div></form></div><div class="lg:col-span-2 p-6 border rounded"><h3 class="font-bold mb-4">Servicios (${services.length})</h3><div>${list}</div></div></div>`;
+  }
+
+  function renderClientsView() {
+    const list = clients.map(c => `
+      <div class="flex justify-between items-center p-4 border rounded mb-3">
+        <div>
+            <div class="font-semibold">${escapeHtml(c.nombre)}</div>
+            <div class="text-sm text-gray-500">DNI: ${escapeHtml(c.dni || 'S/D')} | Tel: ${escapeHtml(c.telefono || '-')}</div>
+        </div>
+        <div><button onclick="deleteClient(${c.id_cliente})" class="px-2 py-1 text-red-600">🗑️</button></div>
+      </div>`).join('') || '<p class="text-gray-500">No hay clientes.</p>';
+    
+    return `
+        <div class="grid lg:grid-cols-3 gap-6">
+            <div class="p-6 border rounded">
+                <h3 class="font-bold mb-4">Registrar Cliente</h3>
+                <form id="client-form" class="space-y-3">
+                    <div><label class="text-sm">Nombre Completo</label><input id="client-name" class="w-full border rounded p-2" required /></div>
+                    <div><label class="text-sm">DNI (Obligatorio)</label><input id="client-dni" class="w-full border rounded p-2" required /></div>
+                    <div><label class="text-sm">Teléfono</label><input id="client-phone" class="w-full border rounded p-2" /></div>
+                    <div><button type="submit" class="w-full bg-blue-600 text-white rounded py-2">Guardar</button></div>
+                </form>
+            </div>
+            <div class="lg:col-span-2 p-6 border rounded">
+                <h3 class="font-bold mb-4">Clientes (${clients.length})</h3>
+                <div>${list}</div>
+            </div>
+        </div>`;
+  }
+
+  function renderProfessionalsView() {
+    const list = professionals.map(p => `
+      <div class="flex justify-between items-center p-4 border rounded mb-3">
+        <div class="font-semibold">${escapeHtml(p.nombre)}</div>
+        <div class="flex gap-2">
+            <button onclick="openAvailabilityModal(${p.id_profesional}, '${escapeHtml(p.nombre)}')" class="px-3 py-1 bg-green-100 text-green-700 rounded text-sm hover:bg-green-200">🕒 Horarios</button>
+            <button onclick="openServicesModal(${p.id_profesional}, '${escapeHtml(p.nombre)}')" class="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200">⚙️ Servicios</button>
+            <button onclick="deleteProfessional(${p.id_profesional})" class="px-2 py-1 text-red-600">🗑️</button>
+        </div>
+      </div>`).join('') || '<p class="text-gray-500">No hay profesionales.</p>';
+    return `<div class="grid lg:grid-cols-3 gap-6"><div class="p-6 border rounded"><h3 class="font-bold mb-4">Crear Profesional</h3><form id="professional-form" class="space-y-3"><div><label class="text-sm">Nombre</label><input id="professional-name" class="w-full border rounded p-2" required /></div><div><button type="submit" class="w-full bg-blue-600 text-white rounded py-2">Crear Profesional</button></div></form></div><div class="lg:col-span-2 p-6 border rounded"><h3 class="font-bold mb-4">Profesionales (${professionals.length})</h3><div>${list}</div></div></div>`;
+  }
+
+  function renderTurnosView() {
+    return `
+      <div class="grid lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 p-6 border rounded">
+          <h3 class="font-bold mb-4">Agendar Turno</h3>
+          <div class="grid md:grid-cols-3 gap-4">
+            <div><label class="text-sm font-bold text-gray-700">1. Servicio</label><select id="appointment-service" class="w-full border rounded p-2 bg-white"><option value="">-- seleccionar --</option>${services.map(s=>`<option value="${s.id_servicio}">${escapeHtml(s.nombre)} (${s.duracion_minutos} min)</option>`).join('')}</select></div>
+            <div><label class="text-sm font-bold text-gray-700">2. Profesional</label><select id="appointment-prof" disabled class="w-full border rounded p-2 bg-gray-100 cursor-not-allowed"><option value="">-- primero servicio --</option></select></div>
+            <div><label class="text-sm font-bold text-gray-700">3. Cliente</label><select id="appointment-client" class="w-full border rounded p-2 bg-white"><option value="">-- seleccionar --</option>${clients.map(c=>`<option value="${c.id_cliente}">${escapeHtml(c.nombre)} (DNI: ${c.dni})</option>`).join('')}</select></div>
+          </div>
+          <div class="mt-6 flex gap-6">
+            <div id="calendar-wrap" class="bg-white p-4 rounded shadow"><div id="inline-calendar"></div></div>
+            <div class="flex-1 bg-white p-4 rounded shadow">
+                <div class="mb-2 text-sm font-semibold">Franjas disponibles</div>
+                <div id="slots-container" class="min-h-[180px]"></div>
+                <div class="mt-4"><button id="confirm-slot" class="w-full bg-green-600 text-white rounded py-2">Confirmar turno</button></div>
+                <input type="hidden" id="selected-date" /><input type="hidden" id="selected-time" />
+            </div>
+          </div>
+        </div>
         
-        // Listas locales para renderizado (se llenan desde el backend)
-        let services = []; 
-        let clients = [];  
-        let professionals = []; // NUEVO: Necesario para crear turnos
-        let appointments = []; 
+        <div class="p-6 border rounded h-fit">
+          <h3 class="font-bold mb-4">Turnos del día <span id="selected-date-display" class="font-normal text-gray-500 text-sm"></span></h3>
+          <div id="appointments-list-container" class="max-h-[500px] overflow-y-auto pr-2">
+            <p class="text-gray-500 text-sm">Selecciona una fecha en el calendario.</p>
+          </div>
+        </div>
+      </div>`;
+  }
 
-        // --- FUNCIONES DE UTILIDAD ---
-        function showMessage(message, type = 'success') {
-            const container = document.getElementById('message-container');
-            const color = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500';
-            const element = document.createElement('div');
-            element.className = `${color} text-white px-6 py-3 rounded-lg shadow-xl mb-3 transition-all duration-300 transform translate-x-0 opacity-100`;
-            element.textContent = message;
-            
-            container.appendChild(element);
-            setTimeout(() => {
-                element.classList.replace('opacity-100', 'opacity-0');
-                setTimeout(() => element.remove(), 500);
-            }, 4000);
-        }
+  function renderDailyAppointments(dateStr) {
+      const container = document.getElementById('appointments-list-container');
+      const dateDisplay = document.getElementById('selected-date-display');
+      
+      if(dateDisplay) dateDisplay.textContent = `(${dateStr})`;
+      if(!container) return;
 
-        // --- 1. INICIALIZACIÓN Y CARGA DE DATOS ---
-        async function initApp() {
-            if (!token || activeUserRole !== 'gestor') {
-                alert('Acceso Denegado. Inicia sesión como Gestor.');
-                window.location.href = 'login.html';
-                return;
-            }
+      const dailyTurns = appointments
+        .filter(t => t.fecha === dateStr && t.estado !== 'cancelado')
+        .sort((a,b) => (a.hora||'').localeCompare(b.hora||''));
 
-            document.getElementById('user-id-display').innerHTML = `
-                Usuario: <strong class="text-blue-600">${activeUserName || 'Gestor'}</strong>
-            `;
+      if (dailyTurns.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-sm mt-4">No hay turnos reservados para este día.</p>';
+          return;
+      }
 
-            document.getElementById('logout-button').onclick = () => {
-                localStorage.clear();
-                window.location.href = 'login.html';
-            };
+      const html = dailyTurns.map(t => {
+          const serv = services.find(s => s.id_servicio === t.id_servicio) || {};
+          const prof = professionals.find(p => p.id_profesional === t.id_profesional) || {};
+          const cli = clients.find(c => c.id_cliente === t.id_cliente) || {}; 
 
-            await loadDataFromBackend();
-            renderView(currentView);
-        }
-
-        async function loadDataFromBackend() {
-            try {
-                const headers = { 'Content-Type': 'application/json', 'x-access-token': token };
-
-                // 1. Servicios
-                const resServ = await fetch(`${API_URL}/servicios`, { headers });
-                const dataServ = await resServ.json();
-                // Mapear campos de BD a Frontend
-                services = dataServ.map(s => ({
-                    id: s.id_servicio,
-                    name: s.nombre,
-                    duration: s.duracion_minutos,
-                    price: 0, // Tu BD no tiene precio aún, ponemos 0 por defecto
-                    id_negocio: s.id_negocio
-                }));
-
-                // 2. Clientes
-                const resCli = await fetch(`${API_URL}/clientes`, { headers });
-                const dataCli = await resCli.json();
-                clients = dataCli.map(c => ({
-                    id: c.id_cliente,
-                    name: c.nombre,
-                    phone: c.telefono,
-                    email: 'No registrado' // Tu BD no tiene email en tabla cliente
-                }));
-
-                // 3. Profesionales (NUEVO: Requerido para Turnos)
-                const resProf = await fetch(`${API_URL}/profesionales`, { headers });
-                const dataProf = await resProf.json();
-                professionals = dataProf.map(p => ({
-                    id: p.id_profesional,
-                    name: p.nombre
-                }));
-
-                // 4. Turnos
-                const resTurnos = await fetch(`${API_URL}/turnos`, { headers });
-                const dataTurnos = await resTurnos.json();
-                appointments = dataTurnos.map(t => ({
-                    id: t.id_turno,
-                    clientId: t.id_cliente,
-                    serviceId: t.id_servicio,
-                    profesionalId: t.id_profesional,
-                    // Combinar fecha y hora para el frontend
-                    dateTime: `${t.fecha}T${t.hora}`, 
-                    status: t.estado
-                })).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-
-                console.log("Datos sincronizados con Backend");
-
-            } catch (error) {
-                console.error("Error cargando datos:", error);
-                showMessage("Error de conexión con el servidor.", "error");
-            }
-        }
-
-        // --- 2. RENDERIZADO Y NAVEGACIÓN ---
-
-        document.querySelectorAll('.nav-tab').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const newView = e.target.getAttribute('data-view');
-                renderView(newView);
-            });
-        });
-
-        function renderView(viewName) {
-            currentView = viewName;
-            const container = document.getElementById('content-container');
-            container.innerHTML = '';
-
-            document.querySelectorAll('.nav-tab').forEach(btn => {
-                const isActive = btn.getAttribute('data-view') === viewName;
-                btn.className = isActive
-                    ? 'nav-tab bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-200'
-                    : 'nav-tab text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-lg transition duration-200';
-            });
-
-            switch (viewName) {
-                case 'servicios':
-                    container.innerHTML = renderServicesView();
-                    setupServiceEventListeners();
-                    break;
-                case 'clientes':
-                    container.innerHTML = renderClientsView();
-                    setupClientEventListeners();
-                    break;
-                case 'turnos':
-                    container.innerHTML = renderAppointmentsView();
-                    setupAppointmentEventListeners();
-                    break;
-                case 'reportes':
-                    container.innerHTML = renderReportsView();
-                    break;
-                default:
-                    container.innerHTML = `<div class="text-center p-10">Vista no encontrada.</div>`;
-            }
-        }
-
-        // --- 3. VISTAS (HTML TEMPLATES) ---
-
-        function renderServicesView() {
-            const serviceList = services.map(s => `
-                <div class="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
-                    <div>
-                        <p class="text-lg font-semibold text-gray-800">${s.name}</p>
-                        <p class="text-sm text-gray-500">${s.duration} min</p>
-                    </div>
-                    <button class="text-gray-400 hover:text-red-500 cursor-not-allowed" title="Eliminar no disponible aún">🗑️</button>
+          return `
+            <div class="flex flex-col p-3 border-l-4 border-blue-500 bg-gray-50 rounded mb-3 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <span class="text-lg font-bold text-gray-800">${(t.hora||'').substring(0,5)}</span>
+                    <button onclick="deleteTurno(${t.id_turno})" class="text-xs text-red-500 font-bold hover:underline">Cancelar</button>
                 </div>
-            `).join('');
+                <div class="text-sm font-semibold text-blue-800 mt-1">${escapeHtml(cli.nombre || 'Cliente desc.')}</div>
+                <div class="text-xs text-gray-600">${escapeHtml(serv.nombre || 'Servicio')} con ${escapeHtml(prof.nombre || 'Prof.')}</div>
+            </div>
+          `;
+      }).join('');
 
-            return `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Crear Servicio</h2>
-                        <form id="service-form" class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nombre</label>
-                                <input type="text" id="service-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border" placeholder="Ej: Corte">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Duración (min)</label>
-                                <input type="number" id="service-duration" required min="1" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border" value="30">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">Guardar</button>
-                        </form>
-                    </div>
-                    <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Servicios (${services.length})</h2>
-                        <div class="space-y-3">${services.length > 0 ? serviceList : '<p class="text-gray-500">No hay servicios.</p>'}</div>
-                    </div>
-                </div>
-            `;
-        }
+      container.innerHTML = html;
+  }
 
-        function renderClientsView() {
-            const clientList = clients.map(c => `
-                <div class="flex justify-between items-start bg-white p-4 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
-                    <div>
-                        <p class="text-lg font-semibold text-gray-800">${c.name}</p>
-                        <p class="text-sm text-gray-500">Tel: ${c.phone}</p>
-                    </div>
-                </div>
-            `).join('');
+  function renderSlotsFor(fecha, profId, servId) {
+    const cont = document.getElementById('slots-container'); if(!cont) return; cont.innerHTML = '';
+    if (!fecha) { cont.innerHTML = '<div class="text-sm text-gray-500">Selecciona fecha.</div>'; return; }
+    if (!profId || !servId) { cont.innerHTML = '<div class="text-sm text-gray-500">Selecciona prof. y servicio.</div>'; return; }
+    const available = getAvailableTimeSlots(fecha, profId, servId);
+    if (available.length===0) { cont.innerHTML = '<div class="text-sm text-yellow-600 mt-2">No hay disponibilidad configurada para este día. Ve a "Profesionales > Horarios".</div>'; return; }
+    available.forEach(slot => {
+      const btn = document.createElement('button'); btn.type='button'; btn.className='slot-btn slot-available text-sm'; btn.textContent = slot;
+      btn.onclick = ()=> { document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('slot-selected')); btn.classList.add('slot-selected'); document.getElementById('selected-time').value = slot; }; 
+      cont.appendChild(btn);
+    });
+  }
 
-            return `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Registrar Cliente</h2>
-                        <form id="client-form" class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Nombre Completo</label>
-                                <input type="text" id="client-name" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Teléfono</label>
-                                <input type="tel" id="client-phone" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm p-3 border">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">Guardar</button>
-                        </form>
-                    </div>
-                    <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Clientes (${clients.length})</h2>
-                        <div class="space-y-3">${clients.length > 0 ? clientList : '<p class="text-gray-500">No hay clientes.</p>'}</div>
-                    </div>
-                </div>
-            `;
-        }
+  let fpInstance = null;
+  function initInlineCalendar() {
+    const el = document.getElementById('inline-calendar'); if (!el) return;
+    if (fpInstance) fpInstance.destroy();
+    fpInstance = flatpickr(el, { 
+        inline: true, 
+        dateFormat: 'Y-m-d', 
+        locale: 'es', 
+        onChange: (d, dateStr) => { 
+            document.getElementById('selected-date').value = dateStr; 
+            renderSlotsFor(dateStr, document.getElementById('appointment-prof')?.value, document.getElementById('appointment-service')?.value);
+            renderDailyAppointments(dateStr); 
+        } 
+    });
+    
+    const today = new Date().toISOString().split('T')[0];
+    fpInstance.setDate(today, true); 
+  }
 
-        function renderAppointmentsView() {
-            const clientOptions = clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-            const serviceOptions = services.map(s => `<option value="${s.id}">${s.name} (${s.duration} min)</option>`).join('');
-            const profOptions = professionals.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            
-            const now = new Date().toISOString().slice(0, 16);
+  window.openServicesModal = async (profId, profName) => {
+    document.getElementById('services-modal').classList.remove('hidden-modal');
+    document.getElementById('modal-prof-name').textContent = profName;
+    const list = document.getElementById('modal-services-list'); list.innerHTML = 'Cargando...';
+    let assignedIds = []; try { assignedIds = await (await fetch(`${API_URL}/profesionales/${profId}/servicios`, {headers})).json(); } catch(e){}
+    list.innerHTML = ''; services.forEach(s => {
+        const div = document.createElement('div'); div.className = 'flex items-center gap-2';
+        const isChecked = assignedIds.includes(s.id_servicio);
+        div.innerHTML = `<input type="checkbox" id="srv-${s.id_servicio}" ${isChecked ? 'checked' : ''} class="w-4 h-4"><label for="srv-${s.id_servicio}" class="text-sm text-gray-700 cursor-pointer">${escapeHtml(s.nombre)}</label>`;
+        div.querySelector('input').onchange = async (e) => {
+            const chk = e.target; chk.disabled=true;
+            try { await fetch(`${API_URL}/profesionales/${profId}/servicios${chk.checked?'':'/'+s.id_servicio}`, { method: chk.checked?'POST':'DELETE', headers, body: chk.checked?JSON.stringify({id_servicio: s.id_servicio}):null }); } 
+            catch(e) { chk.checked=!chk.checked; } chk.disabled=false;
+        };
+        list.appendChild(div);
+    });
+  };
 
-            return `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-1 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4 border-b pb-2">Agendar Turno</h2>
-                        <form id="appointment-form" class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Cliente</label>
-                                <select id="appointment-client" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
-                                    <option value="" disabled selected>Seleccionar...</option>
-                                    ${clientOptions}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Profesional</label>
-                                <select id="appointment-prof" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
-                                    <option value="" disabled selected>Seleccionar...</option>
-                                    ${profOptions}
-                                </select>
-                                ${professionals.length === 0 ? '<p class="text-xs text-red-500">¡Crea un profesional en BD primero!</p>' : ''}
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Servicio</label>
-                                <select id="appointment-service" required class="mt-1 block w-full rounded-lg border p-3 bg-white">
-                                    <option value="" disabled selected>Seleccionar...</option>
-                                    ${serviceOptions}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Fecha y Hora</label>
-                                <input type="datetime-local" id="appointment-datetime" required min="${now}" class="mt-1 block w-full rounded-lg border p-3">
-                            </div>
-                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition">Confirmar Turno</button>
-                        </form>
-                    </div>
+  const daysMap = {0:'Lunes',1:'Martes',2:'Miércoles',3:'Jueves',4:'Viernes',5:'Sábado',6:'Domingo'};
+  window.openAvailabilityModal = async (profId, profName) => {
+      currentProfId = profId; document.getElementById('availability-modal').classList.remove('hidden-modal');
+      document.getElementById('modal-avail-prof-name').textContent = profName; await renderAvailabilityList();
+  };
+  async function renderAvailabilityList() {
+      const tbody = document.getElementById('availability-list-body'); tbody.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-gray-500">Cargando...</td></tr>';
+      await loadDataFromBackend(); 
+      const profDispo = disponibilidades.filter(d => String(d.id_profesional) === String(currentProfId)).sort((a,b)=>a.dia_semana - b.dia_semana);
+      tbody.innerHTML = ''; if(profDispo.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="p-2 text-center text-gray-500">Sin horarios asignados.</td></tr>'; return; }
+      profDispo.forEach(d => {
+          const row = document.createElement('tr'); row.className = "border-b";
+          row.innerHTML = `<td class="p-2 font-medium">${daysMap[d.dia_semana]}</td><td class="p-2">${(d.hora_inicio||'').slice(0,5)}</td><td class="p-2">${(d.hora_fin||'').slice(0,5)}</td><td class="p-2 text-right"><button onclick="deleteAvailability(${d.id_disponibilidad})" class="text-red-500 hover:text-red-700 font-bold">×</button></td>`;
+          tbody.appendChild(row);
+      });
+  }
+  window.addAvailability = async () => {
+      const day = document.getElementById('avail-day').value; const start = document.getElementById('avail-start').value; const end = document.getElementById('avail-end').value;
+      if(!start || !end) return showMessage('Ingrese inicio y fin', 'error');
+      if(start >= end) return showMessage('El inicio debe ser antes del fin', 'error');
+      try {
+          const res = await fetch(`${API_URL}/disponibilidades`, { method: 'POST', headers, body: JSON.stringify({ id_profesional: currentProfId, dia_semana: parseInt(day), hora_inicio: start, hora_fin: end }) });
+          const json = await res.json(); if(res.ok) { showMessage('Horario agregado'); await renderAvailabilityList(); } else showMessage(json.error || 'Error de solapamiento', 'error');
+      } catch(e) { console.error(e); }
+  };
+  window.deleteAvailability = async (id) => { if(!confirm('Eliminar horario?')) return; try { const res = await fetch(`${API_URL}/disponibilidades/${id}`, {method:'DELETE', headers}); if(res.ok) await renderAvailabilityList(); } catch(e) { console.error(e); } };
 
-                    <div class="lg:col-span-2 p-6 bg-white rounded-xl shadow-xl">
-                        <h2 class="text-2xl font-bold text-blue-800 mb-4">Próximos Turnos</h2>
-                        <div class="space-y-3">
-                            ${renderUpcomingAppointments()}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+  function bindServiceForm() {
+    const f = document.getElementById('service-form'); if(!f) return;
+    f.onsubmit = async e => { e.preventDefault(); const nombre=document.getElementById('service-name').value; const dur=document.getElementById('service-duration').value; const res=await fetch(`${API_URL}/servicios`,{method:'POST',headers,body:JSON.stringify({nombre, duracion_minutos:dur, id_negocio: businessId})}); if(res.ok){ showMessage('Creado'); await loadAndRender('servicios'); } else { const j=await res.json(); showMessage(j.error||'Error','error'); } };
+  }
+  
+  // --- FORM CLIENTES ---
+  function bindClientForm() {
+    const f = document.getElementById('client-form'); if(!f) return;
+    f.onsubmit = async e => { 
+        e.preventDefault(); 
+        const nombre=document.getElementById('client-name').value; 
+        const dni=document.getElementById('client-dni').value; 
+        const tel=document.getElementById('client-phone').value;
+        if(!dni) return showMessage('El DNI es obligatorio', 'error');
+        const res=await fetch(`${API_URL}/clientes`,{method:'POST',headers,body:JSON.stringify({nombre, dni, telefono:tel, id_negocio: businessId})});
+        if(res.ok){ showMessage('Cliente Creado'); await loadAndRender('clientes'); } else { const j=await res.json(); showMessage(j.error||'Error al crear cliente', 'error'); }
+    };
+  }
 
-        function renderUpcomingAppointments() {
-            const upcoming = appointments.filter(a => new Date(a.dateTime) >= new Date() && a.status !== 'cancelado');
-            if (upcoming.length === 0) return '<p class="text-gray-500">No hay turnos pendientes.</p>';
+  function bindProfessionalForm() {
+    const f = document.getElementById('professional-form'); if(!f) return;
+    f.onsubmit = async e => { e.preventDefault(); const nombre=document.getElementById('professional-name').value; const res=await fetch(`${API_URL}/profesionales`,{method:'POST',headers,body:JSON.stringify({nombre, id_negocio: businessId})}); if(res.ok){ showMessage('Creado'); await loadAndRender('profesionales'); } else { const j=await res.json(); showMessage(j.error||'Error','error'); } };
+  }
 
-            return upcoming.map(a => {
-                const client = clients.find(c => c.id === a.clientId) || { name: 'Desconocido' };
-                const service = services.find(s => s.id === a.serviceId) || { name: 'Desconocido', duration: 0 };
-                const prof = professionals.find(p => p.id === a.profesionalId) || { name: 'Desconocido' };
-                const dateObj = new Date(a.dateTime);
+  function bindTurnosFormBindings() {
+    initInlineCalendar();
+    const selServ = document.getElementById('appointment-service');
+    const selProf = document.getElementById('appointment-prof');
+    const selClient = document.getElementById('appointment-client');
 
-                return `
-                    <div class="flex items-start bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
-                        <div class="flex-grow">
-                            <p class="text-lg font-bold text-gray-900">
-                                ${dateObj.toLocaleDateString()} ${dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                            </p>
-                            <p class="text-md font-semibold text-gray-700">${service.name} con ${client.name}</p>
-                            <p class="text-sm text-gray-500">Prof: ${prof.name} | ${service.duration} min</p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
+    if(selServ) {
+        selServ.onchange = async () => {
+            const serviceId = selServ.value;
+            selProf.value = ""; selProf.innerHTML = '<option value="">Cargando...</option>';
+            document.getElementById('slots-container').innerHTML = '';
+            if (serviceId) {
+                try {
+                    const res = await fetch(`${API_URL}/profesionales?id_servicio=${serviceId}`, {headers});
+                    const filteredProfs = await res.json();
+                    selProf.innerHTML = '<option value="">-- seleccionar --</option>';
+                    if(filteredProfs.length === 0) { selProf.innerHTML = '<option value="">Sin profesionales</option>'; } 
+                    else { filteredProfs.forEach(p => { const opt = document.createElement('option'); opt.value = p.id_profesional; opt.textContent = escapeHtml(p.nombre); selProf.appendChild(opt); }); selProf.disabled = false; selProf.classList.remove('bg-gray-100', 'cursor-not-allowed'); selProf.classList.add('bg-white'); }
+                } catch(e) { console.error(e); }
+            } else { selProf.disabled = true; selProf.classList.add('bg-gray-100', 'cursor-not-allowed'); selProf.innerHTML = '<option value="">-- primero servicio --</option>'; }
+        };
+    }
+    if(selProf) selProf.onchange = () => renderSlotsFor(document.getElementById('selected-date').value, selProf.value, selServ.value);
 
-        function renderReportsView() {
-            return `
-                <div class="p-6 bg-white rounded-xl shadow-xl text-center">
-                    <h2 class="text-2xl font-bold text-gray-800">Reportes</h2>
-                    <div class="grid grid-cols-2 gap-4 mt-6">
-                        <div class="p-4 bg-blue-50 rounded-lg">
-                            <p class="text-3xl font-bold text-blue-600">${services.length}</p>
-                            <p>Servicios</p>
-                        </div>
-                        <div class="p-4 bg-green-50 rounded-lg">
-                            <p class="text-3xl font-bold text-green-600">${clients.length}</p>
-                            <p>Clientes</p>
-                        </div>
-                        <div class="p-4 bg-yellow-50 rounded-lg">
-                            <p class="text-3xl font-bold text-yellow-600">${appointments.length}</p>
-                            <p>Turnos Totales</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+    document.getElementById('confirm-slot').onclick = async () => {
+      const body = { id_cliente: selClient.value, id_profesional: selProf.value, id_servicio: selServ.value, fecha: document.getElementById('selected-date').value, hora: document.getElementById('selected-time').value };
+      if(!body.id_profesional || !body.id_servicio || !body.hora) return showMessage('Faltan datos','error');
+      const res = await fetch(`${API_URL}/turnos`, {method:'POST', headers, body: JSON.stringify(body)});
+      const json = await res.json();
+      if(res.ok) { 
+          showMessage('Turno Agendado!'); 
+          await loadAndRender('turnos'); 
+          renderDailyAppointments(body.fecha);
+      } else showMessage(json.error || 'Error', 'error');
+    };
+  }
 
-        // --- 4. MANEJADORES DE EVENTOS (POST REQUESTS) ---
+  window.deleteService = async id => { if(confirm('Eliminar?')) { await fetch(`${API_URL}/servicios/${id}`, {method:'DELETE', headers}); loadAndRender('servicios'); }};
+  window.deleteClient = async id => { if(confirm('Eliminar?')) { await fetch(`${API_URL}/clientes/${id}`, {method:'DELETE', headers}); loadAndRender('clientes'); }};
+  window.deleteProfessional = async id => { if(confirm('Eliminar?')) { await fetch(`${API_URL}/profesionales/${id}`, {method:'DELETE', headers}); loadAndRender('profesionales'); }};
+  window.deleteTurno = async id => { 
+      if(confirm('Eliminar?')) { 
+          const res = await fetch(`${API_URL}/turnos/${id}`, {method:'DELETE', headers}); 
+          if(res.ok) {
+              await loadDataFromBackend(); 
+              renderTurnosView(); 
+              setTimeout(bindTurnosFormBindings, 50); 
+          }
+      }
+  };
 
-        function setupServiceEventListeners() {
-            const form = document.getElementById('service-form');
-            if (form) {
-                form.onsubmit = async (e) => {
-                    e.preventDefault();
-                    const name = document.getElementById('service-name').value.trim();
-                    const duration = parseInt(document.getElementById('service-duration').value);
+  function renderView(name) {
+    const container = document.getElementById('content-container');
+    if(name==='servicios') { container.innerHTML=renderServicesView(); bindServiceForm(); }
+    else if(name==='clientes') { container.innerHTML=renderClientsView(); bindClientForm(); }
+    else if(name==='profesionales') { container.innerHTML=renderProfessionalsView(); bindProfessionalForm(); }
+    else if(name==='turnos') { container.innerHTML=renderTurnosView(); setTimeout(bindTurnosFormBindings,50); }
+    
+    document.querySelectorAll('.nav-tab').forEach(b => { b.className = b.getAttribute('data-view')===name ? 'nav-tab py-2 px-4 rounded bg-blue-600 text-white font-semibold' : 'nav-tab py-2 px-4 rounded hover:bg-gray-100'; });
+  }
 
-                    try {
-                        const res = await fetch(`${API_URL}/servicios`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-                            body: JSON.stringify({
-                                nombre: name,
-                                duracion_minutos: duration,
-                                id_negocio: 1 // ID hardcodeado o dinámico si lo tienes
-                            })
-                        });
-
-                        if (res.ok) {
-                            showMessage('Servicio creado exitosamente');
-                            await loadDataFromBackend();
-                            renderView('servicios');
-                        } else {
-                            const err = await res.json();
-                            showMessage(`Error: ${err.error}`, 'error');
-                        }
-                    } catch (e) { showMessage("Error de conexión", "error"); }
-                };
-            }
-        }
-
-        function setupClientEventListeners() {
-            const form = document.getElementById('client-form');
-            if (form) {
-                form.onsubmit = async (e) => {
-                    e.preventDefault();
-                    const name = document.getElementById('client-name').value.trim();
-                    const phone = document.getElementById('client-phone').value.trim();
-
-                    try {
-                        const res = await fetch(`${API_URL}/clientes`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-                            body: JSON.stringify({
-                                nombre: name,
-                                telefono: phone,
-                                id_negocio: 1
-                            })
-                        });
-
-                        if (res.ok) {
-                            showMessage('Cliente registrado');
-                            await loadDataFromBackend();
-                            renderView('clientes');
-                        } else {
-                            const err = await res.json();
-                            showMessage(`Error: ${err.error}`, 'error');
-                        }
-                    } catch (e) { showMessage("Error de conexión", "error"); }
-                };
-            }
-        }
-
-        function setupAppointmentEventListeners() {
-            const form = document.getElementById('appointment-form');
-            if (form) {
-                form.onsubmit = async (e) => {
-                    e.preventDefault();
-                    const clientId = document.getElementById('appointment-client').value;
-                    const profId = document.getElementById('appointment-prof').value;
-                    const serviceId = document.getElementById('appointment-service').value;
-                    const datetimeVal = document.getElementById('appointment-datetime').value;
-
-                    if (!clientId || !profId || !serviceId || !datetimeVal) {
-                        showMessage("Completa todos los campos", "warning");
-                        return;
-                    }
-
-                    // Separar fecha y hora para el backend (YYYY-MM-DD y HH:MM)
-                    const dateObj = new Date(datetimeVal);
-                    const fecha = datetimeVal.split('T')[0];
-                    const hora = datetimeVal.split('T')[1];
-
-                    try {
-                        const res = await fetch(`${API_URL}/turnos`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-                            body: JSON.stringify({
-                                id_cliente: clientId,
-                                id_profesional: profId,
-                                id_servicio: serviceId,
-                                fecha: fecha,
-                                hora: hora
-                            })
-                        });
-
-                        if (res.ok) { // Código 201
-                            showMessage('¡Turno agendado con éxito!');
-                            await loadDataFromBackend();
-                            renderView('turnos');
-                        } else {
-                            const err = await res.json();
-                            // Manejo específico del error de conflicto (Código 500 o 409 según tu backend)
-                            if (err.error && err.error.includes('ocupado')) {
-                                showMessage('⚠️ CONFLICTO: El profesional ya está ocupado en ese horario.', 'error');
-                            } else {
-                                showMessage(`Error: ${err.error}`, 'error');
-                            }
-                        }
-                    } catch (e) { showMessage("Error de conexión", "error"); }
-                };
-            }
-        }
-
-        // Iniciar
-        window.onload = initApp;
-
-    </script>
+  async function loadAndRender(view='servicios') { await loadDataFromBackend(); renderView(view); }
+  document.getElementById('btn-logout').onclick = () => { localStorage.clear(); window.location.href='login.html'; };
+  (async function init(){ if(!token) window.location.href='login.html'; const name = localStorage.getItem('activeUserName'); if(name) document.getElementById('user-info').textContent = name; await loadAndRender('servicios'); document.querySelectorAll('.nav-tab').forEach(btn => btn.addEventListener('click', ()=> loadAndRender(btn.getAttribute('data-view')))); })();
+})();
+</script>
 </body>
 </html>

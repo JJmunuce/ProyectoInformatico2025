@@ -1,23 +1,3 @@
-<!--¡Sí, absolutamente! frontend/citas.html también necesita una reforma total.
-
-Actualmente, este archivo funciona con datos de "juguete" (simulatedProfesionales, simulatedServicios, localStorage). Si intentas usarlo ahora, no guardará nada en tu base de datos y los turnos que agendes ahí no los verá el gestor en su panel.
-
-Aquí tienes el código corregido para conectar la vista del cliente con tu backend real.
-
-Cambios Clave Realizados:
-Conexión Real: Ahora carga Profesionales y Servicios desde la API (fetch).
-
-Detección de Turnos Ocupados: Antes de reservar, el sistema descarga los turnos reales, revisa si el horario está ocupado para ese profesional y bloquea visualmente el botón (lo pone en gris/rojo) para evitar conflictos.
-
-Historial Real: La pestaña "Mis Turnos" ahora muestra lo que realmente está en la base de datos MySQL.
-
-Limitación: Tu Backend actual no tiene una ruta para cancelar/borrar turnos (DELETE), así que he deshabilitado el botón de cancelar con un aviso.
-
-Código Completo para frontend/citas.html
-Copia y reemplaza todo el contenido de tu archivo actual:
-
-HTML
--->
 <!DOCTYPE html>
 <html lang="es">
 <head>
