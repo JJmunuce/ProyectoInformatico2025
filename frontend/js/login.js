@@ -110,21 +110,28 @@
                         if (data.nombre) localStorage.setItem('activeUserName', data.nombre);
                         if (data.token) localStorage.setItem('activeUserToken', data.token);
 
-                        if (data.id_negocio) {
+                        // LÓGICA CORREGIDA DE REDIRECCIÓN
+                        if (data.sin_negocio) {
+                            // Usuario nuevo: Lo mandamos al panel para que CREE su negocio
                             localStorage.setItem('activeUserRole', 'gestor');
-                            if (data.id_negocio) localStorage.setItem('activeBusinessId', data.id_negocio);
-                            alertModal(`¡Bienvenido ${data.nombre || ''}!`, 'success', () => {
+                            localStorage.removeItem('activeBusinessId'); // Asegurar que esté limpio
+                            alertModal(`¡Bienvenido ${data.nombre}! Vamos a configurar tu negocio.`, 'success', () => {
+                                window.location.href = 'panelNegocio.html';
+                            });
+                        } else if (data.id_negocio) {
+                            // Usuario gestor existente
+                            localStorage.setItem('activeUserRole', 'gestor');
+                            localStorage.setItem('activeBusinessId', data.id_negocio);
+                            alertModal(`¡Bienvenido de nuevo ${data.nombre}!`, 'success', () => {
                                 window.location.href = 'panelNegocio.html';
                             });
                         } else {
+                            // Fallback para clientes puros (si existiera rol cliente en BD)
                             localStorage.setItem('activeUserRole', 'cliente');
-                            alertModal(`¡Bienvenido ${data.nombre || ''}!`, 'success', () => {
+                            alertModal(`¡Hola ${data.nombre}!`, 'success', () => {
                                 window.location.href = 'citas.html';
                             });
                         }
-                    } else {
-                        const message = (data && (data.message || data.error)) || `Error: ${resp.status}`;
-                        alertModal(message, 'error');
                     }
                 } catch (err) {
                     console.error("Error de conexión:", err);

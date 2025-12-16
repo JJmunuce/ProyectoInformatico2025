@@ -23,9 +23,15 @@ class Turno:
         }
 
     @classmethod
-    def get_all(cls):
+    def get_all(cls, id_negocio): # <--- Recibe id_negocio
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM turno")
+        # Filtramos los turnos uniendo con la tabla profesional para verificar el negocio
+        query = """
+            SELECT t.* FROM turno t
+            JOIN profesional p ON t.id_profesional = p.id_profesional
+            WHERE p.id_negocio = %s
+        """
+        cur.execute(query, (id_negocio,))
         rows = cur.fetchall()
         cur.close()
         return [cls(row).to_json() for row in rows]
@@ -45,24 +51,20 @@ class Turno:
         
         # 2. Parsear fecha y hora
         try:
-            # Asume formato fecha YYYY-MM-DD y hora HH:MM
             fecha_obj = datetime.strptime(data['fecha'], '%Y-%m-%d').date()
             hora_inicio_dt = datetime.strptime(data['hora'], '%H:%M') 
         except ValueError:
             cur.close()
-            raise Exception("Formato de fecha (YYYY-MM-DD) o hora (HH:MM) inválido")
+            raise Exception("Formato de fecha o hora inválido")
 
-        # Calculamos la hora de fin del turno
+        # Calculamos la hora de fin
         hora_fin_dt = hora_inicio_dt + timedelta(minutes=duracion)
-        
         h_inicio_turno = hora_inicio_dt.time()
         h_fin_turno = hora_fin_dt.time()
 
         # 3. VALIDAR DISPONIBILIDAD REAL
-        # Python weekday(): 0=Lunes, 6=Domingo.
         dia_semana = fecha_obj.weekday() 
 
-        # Verificamos si existe un rango de disponibilidad que cubra TODO el turno
         cur.execute("""
             SELECT id_disponibilidad 
             FROM disponibilidad 
@@ -72,13 +74,11 @@ class Turno:
             AND hora_fin >= %s
         """, (data['id_profesional'], dia_semana, h_inicio_turno, h_fin_turno))
         
-        disp_encontrada = cur.fetchone()
-        
-        if not disp_encontrada:
+        if not cur.fetchone():
             cur.close()
-            raise Exception("El profesional no tiene disponibilidad configurada para ese día y horario.")
+            raise Exception("El profesional no tiene disponibilidad configurada para ese horario.")
 
-        # 4. Verificar superposición con otros turnos existentes
+        # 4. Verificar superposición
         cur.execute("""
             SELECT t.id_turno 
             FROM turno t
@@ -87,7 +87,6 @@ class Turno:
             AND t.fecha = %s
             AND t.estado != 'cancelado'
             AND (
-                -- Se solapan si: (InicioA < FinB) y (InicioB < FinA)
                 t.hora < %s 
                 AND ADDTIME(t.hora, SEC_TO_TIME(s.duracion_minutos * 60)) > %s
             )
@@ -95,7 +94,7 @@ class Turno:
         
         if cur.fetchone():
             cur.close()
-            raise Exception("El profesional ya tiene un turno ocupado en ese rango horario")
+            raise Exception("El profesional ya tiene un turno ocupado en ese rango")
 
         # 5. Insertar
         cur.execute("""

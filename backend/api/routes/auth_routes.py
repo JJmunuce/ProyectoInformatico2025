@@ -8,32 +8,44 @@ import traceback
 
 @app.route('/login', methods=['POST'])
 def login():
+    # 1. Obtener datos de forma segura
     data = request.get_json(silent=True)
-    username = data.get('username')
-    password = str(data.get('password'))
+    if not data:
+        return jsonify({"message": "Faltan datos en la solicitud"}), 400
 
-    if not username or not password:
-        return jsonify({"message": "Credenciales incompletas"}), 400
+    # 2. Aceptar variantes de nombres de campo
+    username = data.get('username') or data.get('email') or data.get('correo')
+    password = str(data.get('password') or data.get('contraseña'))
+
+    if not username or not password or password == 'None':
+        return jsonify({"message": "Falta usuario/correo o contraseña"}), 400
 
     try:
         cur = mysql.connection.cursor()
+        # Buscamos por correo
         cur.execute("SELECT * FROM usuario WHERE correo = %s", (username,))
         user_data = cur.fetchone()
         cur.close()
 
         if not user_data:
-            return jsonify({"message": "Usuario o contraseña incorrectos"}), 401
+            return jsonify({"message": "Usuario no encontrado"}), 401
 
-        # Verificar contraseña
-        pwd_hash = user_data.get('contraseña')
-        if isinstance(pwd_hash, bytes): pwd_hash = pwd_hash.decode('utf-8')
+        # 3. Validar Hash
+        # Convertimos de bytes a string si es necesario para compatibilidad
+        stored_hash = user_data.get('contraseña')
+        if isinstance(stored_hash, bytes):
+            stored_hash = stored_hash.decode('utf-8')
         
-        if check_password_hash(pwd_hash, password):
-            # GENERAR TOKEN CON ID_NEGOCIO
+        # Aquí ocurre la magia: Compara el texto plano (password) con el hash guardado
+        if check_password_hash(stored_hash, password):
+            
+            id_negocio = user_data.get('id_negocio')
+            
+            # Generamos el Token
             token_payload = {
                 'id_usuario': user_data['id_usuario'],
-                'id_negocio': user_data['id_negocio'], # <--- CLAVE PARA SEGURIDAD
-                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=1440) # 24hs
+                'id_negocio': id_negocio, 
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=1440)
             }
             
             token = jwt.encode(token_payload, app.config['SECRET_KEY'], algorithm="HS256")
@@ -41,10 +53,14 @@ def login():
 
             resp = Usuario(user_data).to_json()
             resp['token'] = token
+            # Bandera para saber si redirigir a "Crear Negocio"
+            resp['sin_negocio'] = (id_negocio is None)
+
             return jsonify(resp), 200
             
-        return jsonify({"message": "Usuario o contraseña incorrectos"}), 401
+        return jsonify({"message": "Contraseña incorrecta"}), 401
 
     except Exception as ex:
-        print(ex)
-        return jsonify({'message': 'Error de servidor'}), 500
+        print("ERROR LOGIN:", ex)
+        traceback.print_exc()
+        return jsonify({'message': 'Error interno del servidor', 'error': str(ex)}), 500
