@@ -15,5 +15,10 @@ py -3 -m venv .venv
 pip install -r backend\requirements.txt
 
 ## Ejecutar la aplicacion
-python .\backend\main.py
+cd backend(enter)
+python main.py
+
+## Para generar contraseña encriptada
+con el el virtual activado
+ejecutar py PWGenerator.py, y copiar el resultado en el campo contraseña de la BD
 
