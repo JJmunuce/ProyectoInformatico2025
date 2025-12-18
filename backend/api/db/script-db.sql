@@ -64,11 +64,35 @@ CREATE TABLE servicio (
 ) ENGINE=InnoDB;
 
 -- ==========================
+-- TABLA: servicio_profesional
+-- ==========================
+CREATE TABLE servicio_profesional (
+    id_profesional INT UNSIGNED NOT NULL,
+    id_servicio    INT UNSIGNED NOT NULL,
+
+    -- Clave primaria compuesta para evitar duplicados (un profesional no puede tener el mismo servicio 2 veces)
+    PRIMARY KEY (id_profesional, id_servicio),
+
+    CONSTRAINT fk_sp_profesional
+        FOREIGN KEY (id_profesional)
+        REFERENCES profesional(id_profesional)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_sp_servicio
+        FOREIGN KEY (id_servicio)
+        REFERENCES servicio(id_servicio)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- ==========================
 -- TABLA: cliente
 -- ==========================
 CREATE TABLE cliente (
     id_cliente  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     nombre      VARCHAR(100) NOT NULL,
+    dni        VARCHAR(20) NOT NULL,
     telefono    VARCHAR(30),
     id_negocio  INT UNSIGNED NOT NULL,
     
